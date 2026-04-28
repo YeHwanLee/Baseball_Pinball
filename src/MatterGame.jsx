@@ -1,8 +1,8 @@
 // MatterGame.jsx
 import React, { useEffect, useRef } from 'react';
 import Matter from 'matter-js';
+import { PROCON_CONFIG } from './App'; // 💡 App.jsx에서 만든 프로콘 설정을 불러옵니다.
 
-// 💡 보내주신 사용자 맞춤형 설정 완벽 적용
 const CONFIG = {
   pitcher: { x: 300, y: 400 },
   hrZone: [
@@ -22,16 +22,16 @@ const CONFIG = {
     { x: 530, y: 600, radius: 20 },
   ],
   foulZones: [
-    { x: 35, y: 815, radius: 30 },
-    { x: 565, y: 815, radius: 30 },
+    { x: 35, y: 810, radius: 30 },
+    { x: 565, y: 810, radius: 30 },
   ],
   defenders: [
     { x: 150, y: 300, radius: 25, range: 60, speed: 0.05 },
     { x: 450, y: 300, radius: 25, range: 60, speed: 0.05 },
   ],
   rails: [
-    { x: 100, y: 910, width: 250, angle: 35 },
-    { x: 500, y: 910, width: 250, angle: -35 },
+    { x: 100, y: 905, width: 250, angle: 35 },
+    { x: 500, y: 905, width: 250, angle: -35 },
   ],
   bat: { pivot: { x: 220, y: 920 }, angleUp: -35, angleDown: 20, speed: 0.16 },
 };
@@ -39,7 +39,7 @@ const CONFIG = {
 const MatterGame = ({ onHit, gameState }) => {
   const canvasRef = useRef(null);
   const engineRef = useRef(null);
-  const isSwinging = useRef(false);
+  const isSwinging = useRef(false); // 키보드/터치용 상태
 
   const onHitRef = useRef(onHit);
   useEffect(() => {
@@ -51,7 +51,6 @@ const MatterGame = ({ onHit, gameState }) => {
     const engine = Engine.create();
     engineRef.current = engine;
 
-    // 💡 [핵심 수정] 배트 뚫림 방지: 물리 엔진의 1프레임당 충돌 계산 횟수를 20으로 상향!
     engine.positionIterations = 20;
     engine.velocityIterations = 20;
     engine.gravity.y = 1.2;
@@ -154,7 +153,6 @@ const MatterGame = ({ onHit, gameState }) => {
     const initialX = CONFIG.bat.pivot.x + batRadius * Math.cos(initialAngleRad);
     const initialY = CONFIG.bat.pivot.y + batRadius * Math.sin(initialAngleRad);
 
-    // 💡 [핵심 수정] 배트 뚫림 방지: 배트 두께를 24에서 30으로 살짝 늘려 충돌 면적 확보
     const bat = Bodies.rectangle(initialX, initialY, 140, 30, {
       label: 'bat',
       isStatic: true,
@@ -181,7 +179,7 @@ const MatterGame = ({ onHit, gameState }) => {
           label: 'ball',
           restitution: 0.5,
           friction: 0.01,
-          isBullet: true, // 고속 충돌 처리 켜짐
+          isBullet: true,
           render: { fillStyle: '#000000' },
         }
       );
@@ -210,6 +208,7 @@ const MatterGame = ({ onHit, gameState }) => {
       });
     });
 
+    // 기존의 키보드 & 터치 입력
     const handleInputDown = (e) => {
       if (e.key === 'Enter' || e.type === 'touchstart') {
         if (e.key === 'Enter') e.preventDefault();
@@ -234,8 +233,26 @@ const MatterGame = ({ onHit, gameState }) => {
 
     let currentAngle = initialAngleRad;
 
+    // 💡 매 프레임마다 실행되는 물리 업데이트 루프
     Events.on(engine, 'beforeUpdate', () => {
-      const targetAngle = isSwinging.current
+      // 💡 [추가] 프로콘 버튼이 눌려있는지 확인
+      let isGamepadPressed = false;
+      const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+      for (let gp of gamepads) {
+        if (gp) {
+          for (let btnIndex of PROCON_CONFIG.actionButtons) {
+            if (gp.buttons[btnIndex] && gp.buttons[btnIndex].pressed) {
+              isGamepadPressed = true;
+              break;
+            }
+          }
+        }
+      }
+
+      // 키보드/터치(isSwinging.current) 또는 프로콘(isGamepadPressed) 둘 중 하나라도 눌리면 스윙!
+      const isSwingingNow = isSwinging.current || isGamepadPressed;
+
+      const targetAngle = isSwingingNow
         ? CONFIG.bat.angleUp * (Math.PI / 180)
         : CONFIG.bat.angleDown * (Math.PI / 180);
       const batSpeed = CONFIG.bat.speed;

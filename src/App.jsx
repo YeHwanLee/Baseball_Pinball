@@ -1,5 +1,5 @@
 // App.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import MatterGame from './MatterGame';
 import './App.css';
 
@@ -11,15 +11,30 @@ const UI_CONFIG = {
   batter: { bottom: '8%', left: '35%', width: '80px' },
 };
 
+// 🎮 [프로콘 설정창] 집에 가셔서 이 숫자들만 바꾸면서 테스트하시면 됩니다!
+export const PROCON_CONFIG = {
+  // 웹 브라우저에서 프로콘을 연결했을 때 일반적인 버튼 번호 (OS마다 다를 수 있음)
+  // 0: B 버튼 (오른쪽 패드 아래)
+  // 1: A 버튼 (오른쪽 패드 오른쪽)
+  // 2: Y 버튼 (오른쪽 패드 왼쪽)
+  // 3: X 버튼 (오른쪽 패드 위)
+  // 6: ZL (왼쪽 뒤 트리거)
+  // 7: ZR (오른쪽 뒤 트리거)
+
+  // 배열 안에 원하는 버튼 번호를 다 적어두면, 그 중 하나만 눌러도 작동합니다.
+  actionButtons: [0, 1, 7], // 기본값: B, A, ZR
+};
+
 function App() {
   const [score, setScore] = useState(0);
   const [outs, setOuts] = useState(0);
   const [strikes, setStrikes] = useState(0);
   const [gameState, setGameState] = useState('READY');
   const [message, setMessage] = useState('');
-
-  // 💡 [추가] 재시작 가능 여부를 체크하는 상태
   const [canRestart, setCanRestart] = useState(true);
+
+  // 패드 버튼이 계속 눌려있을 때 연타로 인식되는 것을 막기 위한 변수
+  const wasGamepadPressed = useRef(false);
 
   const handleHit = (type) => {
     if (gameState !== 'PLAYING') return;
@@ -67,7 +82,6 @@ function App() {
       const newOuts = o + 1;
       if (newOuts >= 3) {
         setGameState('GAMEOVER');
-        // 💡 [추가] 게임 오버 시 즉시 재시작 불가 상태로 만들고, 2.5초 후 해제
         setCanRestart(false);
         setTimeout(() => {
           setCanRestart(true);
@@ -79,7 +93,7 @@ function App() {
   };
 
   const handleStartOrRetry = () => {
-    if (!canRestart) return; // 💡 2.5초가 안 지났으면 무시
+    if (!canRestart) return;
     setScore(0);
     setOuts(0);
     setStrikes(0);
@@ -90,35 +104,62 @@ function App() {
   useEffect(() => {
     const handleStartInput = (e) => {
       if (e.key === 'Enter' || e.type === 'touchstart') {
-        if (gameState !== 'PLAYING' && canRestart) {
-          handleStartOrRetry();
-        }
+        if (gameState !== 'PLAYING' && canRestart) handleStartOrRetry();
       }
     };
+
     window.addEventListener('keydown', handleStartInput);
     window.addEventListener('touchstart', handleStartInput);
+
+    // 💡 [추가] 프로콘 버튼 감지 루프 (게임 시작용)
+    let animationFrameId;
+    const pollGamepad = () => {
+      const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+      let isPressedNow = false;
+
+      for (let gp of gamepads) {
+        if (gp) {
+          for (let btnIndex of PROCON_CONFIG.actionButtons) {
+            if (gp.buttons[btnIndex] && gp.buttons[btnIndex].pressed) {
+              isPressedNow = true;
+              break;
+            }
+          }
+        }
+      }
+
+      // 방금 막 눌렀을 때만(Edge Detection) 실행하여 무한 재시작 방지
+      if (isPressedNow && !wasGamepadPressed.current) {
+        if (gameState !== 'PLAYING' && canRestart) handleStartOrRetry();
+      }
+      wasGamepadPressed.current = isPressedNow;
+
+      animationFrameId = requestAnimationFrame(pollGamepad);
+    };
+    pollGamepad(); // 루프 시작
+
     return () => {
       window.removeEventListener('keydown', handleStartInput);
       window.removeEventListener('touchstart', handleStartInput);
+      cancelAnimationFrame(animationFrameId);
     };
-  }, [gameState, canRestart]); // 💡 의존성 배열에 canRestart 추가
+  }, [gameState, canRestart]);
 
   return (
     <div className="game-wrapper">
       {gameState === 'READY' && (
         <div className="fullscreen-overlay">
-          <h2 className="overlay-text">엔터를 눌러서 시작하세요</h2>
+          <h2 className="overlay-text">엔터로 시작</h2>
         </div>
       )}
       {gameState === 'GAMEOVER' && (
         <div className="fullscreen-overlay">
-          {/* 💡 [추가] 2.5초가 지나야 '엔터로 재시작' 멘트가 뜹니다. */}
           <h2 className="overlay-text">
             {canRestart ? (
               <>
                 게임 오버!
                 <br />
-                엔터로 재시작
+                엔터를 눌러 재시작
               </>
             ) : (
               <>게임 오버!</>
