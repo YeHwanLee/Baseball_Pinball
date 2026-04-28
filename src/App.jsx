@@ -18,6 +18,9 @@ function App() {
   const [gameState, setGameState] = useState('READY');
   const [message, setMessage] = useState('');
 
+  // 💡 [추가] 재시작 가능 여부를 체크하는 상태
+  const [canRestart, setCanRestart] = useState(true);
+
   const handleHit = (type) => {
     if (gameState !== 'PLAYING') return;
 
@@ -62,13 +65,21 @@ function App() {
   const processOut = () => {
     setOuts((o) => {
       const newOuts = o + 1;
-      if (newOuts >= 3) setGameState('GAMEOVER');
+      if (newOuts >= 3) {
+        setGameState('GAMEOVER');
+        // 💡 [추가] 게임 오버 시 즉시 재시작 불가 상태로 만들고, 2.5초 후 해제
+        setCanRestart(false);
+        setTimeout(() => {
+          setCanRestart(true);
+        }, 2500);
+      }
       return newOuts;
     });
     setStrikes(0);
   };
 
   const handleStartOrRetry = () => {
+    if (!canRestart) return; // 💡 2.5초가 안 지났으면 무시
     setScore(0);
     setOuts(0);
     setStrikes(0);
@@ -79,7 +90,9 @@ function App() {
   useEffect(() => {
     const handleStartInput = (e) => {
       if (e.key === 'Enter' || e.type === 'touchstart') {
-        if (gameState !== 'PLAYING') handleStartOrRetry();
+        if (gameState !== 'PLAYING' && canRestart) {
+          handleStartOrRetry();
+        }
       }
     };
     window.addEventListener('keydown', handleStartInput);
@@ -88,11 +101,10 @@ function App() {
       window.removeEventListener('keydown', handleStartInput);
       window.removeEventListener('touchstart', handleStartInput);
     };
-  }, [gameState]);
+  }, [gameState, canRestart]); // 💡 의존성 배열에 canRestart 추가
 
   return (
     <div className="game-wrapper">
-      {/* 💡 [핵심 해결] 게임판에 종속되지 않는 무적의 전체 화면 오버레이! */}
       {gameState === 'READY' && (
         <div className="fullscreen-overlay">
           <h2 className="overlay-text">엔터를 눌러서 시작하세요</h2>
@@ -100,10 +112,17 @@ function App() {
       )}
       {gameState === 'GAMEOVER' && (
         <div className="fullscreen-overlay">
+          {/* 💡 [추가] 2.5초가 지나야 '엔터로 재시작' 멘트가 뜹니다. */}
           <h2 className="overlay-text">
-            게임 오버!
-            <br />
-            엔터로 재시작
+            {canRestart ? (
+              <>
+                게임 오버!
+                <br />
+                엔터로 재시작
+              </>
+            ) : (
+              <>게임 오버!</>
+            )}
           </h2>
         </div>
       )}

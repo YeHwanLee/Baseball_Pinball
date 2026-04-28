@@ -2,6 +2,7 @@
 import React, { useEffect, useRef } from 'react';
 import Matter from 'matter-js';
 
+// 💡 보내주신 사용자 맞춤형 설정 완벽 적용
 const CONFIG = {
   pitcher: { x: 300, y: 400 },
   hrZone: [
@@ -21,20 +22,16 @@ const CONFIG = {
     { x: 530, y: 600, radius: 20 },
   ],
   foulZones: [
-    { x: 35, y: 810, radius: 30 },
-    { x: 565, y: 810, radius: 30 },
+    { x: 35, y: 815, radius: 30 },
+    { x: 565, y: 815, radius: 30 },
   ],
-
-  // 💡 [새로운 기능] 좌우로 움직이는 수비수 설정! (기존 flyOutZones 대체)
   defenders: [
-    // x, y: 중심 좌표 / radius: 크기 / range: 좌우로 이동하는 픽셀 범위 / speed: 왕복 속도
-    { x: 150, y: 300, radius: 25, range: 60, speed: 0.05 }, // 좌익수 느낌
-    { x: 450, y: 300, radius: 25, range: 60, speed: 0.05 }, // 우익수 느낌
+    { x: 150, y: 300, radius: 25, range: 60, speed: 0.05 },
+    { x: 450, y: 300, radius: 25, range: 60, speed: 0.05 },
   ],
-
   rails: [
-    { x: 100, y: 900, width: 250, angle: 35 },
-    { x: 500, y: 900, width: 250, angle: -35 },
+    { x: 100, y: 910, width: 250, angle: 35 },
+    { x: 500, y: 910, width: 250, angle: -35 },
   ],
   bat: { pivot: { x: 220, y: 920 }, angleUp: -35, angleDown: 20, speed: 0.16 },
 };
@@ -54,8 +51,9 @@ const MatterGame = ({ onHit, gameState }) => {
     const engine = Engine.create();
     engineRef.current = engine;
 
-    engine.positionIterations = 10;
-    engine.velocityIterations = 10;
+    // 💡 [핵심 수정] 배트 뚫림 방지: 물리 엔진의 1프레임당 충돌 계산 횟수를 20으로 상향!
+    engine.positionIterations = 20;
+    engine.velocityIterations = 20;
     engine.gravity.y = 1.2;
 
     const render = Render.create({
@@ -118,13 +116,12 @@ const MatterGame = ({ onHit, gameState }) => {
         render: { fillStyle: color, strokeStyle: '#000', lineWidth: 2 },
       });
 
-    // 💡 수비수(Defender) 바디 생성 (각자 다른 타이밍에 움직이도록 초기 시간(time)을 랜덤으로 부여)
     const defenderBodies = CONFIG.defenders.map((def) => {
       const body = Bodies.circle(def.x, def.y, def.radius, {
         isSensor: true,
         isStatic: true,
         label: 'OUT',
-        render: { fillStyle: '#c0392b', strokeStyle: '#fff', lineWidth: 3 }, // 눈에 띄는 빨간색 테두리
+        render: { fillStyle: '#c0392b', strokeStyle: '#fff', lineWidth: 3 },
       });
       return { body, config: def, time: Math.random() * Math.PI * 2 };
     });
@@ -135,7 +132,6 @@ const MatterGame = ({ onHit, gameState }) => {
       ...CONFIG.doubleZones.map((p) => createHole(p, '2B', '#3498db')),
       ...CONFIG.singleZones.map((p) => createHole(p, '1B', '#9b59b6')),
       ...CONFIG.foulZones.map((p) => createHole(p, 'FOUL', '#ecf0f1')),
-      // 💡 생성된 수비수 바디들을 월드에 추가하기 위해 배열에 합침
       ...defenderBodies.map((d) => d.body),
     ];
 
@@ -158,7 +154,8 @@ const MatterGame = ({ onHit, gameState }) => {
     const initialX = CONFIG.bat.pivot.x + batRadius * Math.cos(initialAngleRad);
     const initialY = CONFIG.bat.pivot.y + batRadius * Math.sin(initialAngleRad);
 
-    const bat = Bodies.rectangle(initialX, initialY, 140, 24, {
+    // 💡 [핵심 수정] 배트 뚫림 방지: 배트 두께를 24에서 30으로 살짝 늘려 충돌 면적 확보
+    const bat = Bodies.rectangle(initialX, initialY, 140, 30, {
       label: 'bat',
       isStatic: true,
       angle: initialAngleRad,
@@ -184,8 +181,8 @@ const MatterGame = ({ onHit, gameState }) => {
           label: 'ball',
           restitution: 0.5,
           friction: 0.01,
-          isBullet: true,
-          render: { fillStyle: '#ffffff' },
+          isBullet: true, // 고속 충돌 처리 켜짐
+          render: { fillStyle: '#000000' },
         }
       );
       Composite.add(engine.world, ball);
@@ -237,9 +234,7 @@ const MatterGame = ({ onHit, gameState }) => {
 
     let currentAngle = initialAngleRad;
 
-    // 💡 매 프레임마다 실행되는 업데이트 루프
     Events.on(engine, 'beforeUpdate', () => {
-      // 1. 배트 회전 처리
       const targetAngle = isSwinging.current
         ? CONFIG.bat.angleUp * (Math.PI / 180)
         : CONFIG.bat.angleDown * (Math.PI / 180);
@@ -266,12 +261,10 @@ const MatterGame = ({ onHit, gameState }) => {
         Body.setAngularVelocity(bat, 0);
       }
 
-      // 💡 2. 수비수 좌우 왕복 이동 처리
       defenderBodies.forEach((def) => {
-        def.time += def.config.speed; // 시간에 속도를 더함
-        // 삼각함수(sin)를 이용하여 중심축(config.x)을 기준으로 range만큼 왔다갔다 함
+        def.time += def.config.speed;
         const newX = def.config.x + Math.sin(def.time) * def.config.range;
-        Body.setPosition(def.body, { x: newX, y: def.config.y }); // Y축은 고정
+        Body.setPosition(def.body, { x: newX, y: def.config.y });
       });
     });
 
