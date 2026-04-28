@@ -1,73 +1,191 @@
-/* 기본 브라우저 스크롤 완벽 차단 */
+/* App.css 전체 덮어쓰기 */
+
+/* 핵심: 너비 계산 시 여백(padding)을 포함시켜 모바일에서 화면 밖으로 밀려나는 것 방지 */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
   padding: 0;
   overflow: hidden;
-  background-color: #1a1a1a; /* 빈 공간 배경색 (검은 회색) */
+  background-color: #111;
+  color: white;
+  font-family: 'Arial', sans-serif;
+  user-select: none;
 }
 
-/* 게임 전체 컨테이너를 모바일 화면(100dvh)에 딱 맞게 고정 */
-.game-container {
+.game-wrapper {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   width: 100vw;
-  max-width: 600px; /* PC에서는 너무 커지지 않게 제한 */
-  margin: 0 auto; /* PC에서 가운데 정렬 */
-
-  /* 모바일 브라우저의 상하단 주소창을 고려한 완벽한 높이 설정 */
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
 }
 
-/* 스코어보드는 내용물 크기만큼만 차지 */
-.scoreboard {
-  flex-shrink: 0;
-  /* (기존 폰트 사이즈나 여백 설정이 있다면 그대로 두셔도 됩니다) */
+/* 왼쪽 스코어 패널 (PC) */
+.scoreboard-panel {
+  width: 320px;
+  background-color: #222;
+  border-right: 5px solid #444;
+  padding: 30px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  z-index: 20;
 }
 
-/* 캔버스가 들어갈 랩퍼는 남는 세로 공간을 모두 차지 */
-.canvas-wrapper {
+.score-info h1 {
+  font-size: 2.5rem;
+  margin: 0 0 15px 0;
+  color: #fff;
+}
+.game-msg {
+  font-size: 1.5rem;
+  color: #3498db;
+  min-height: 50px;
+  margin: 0;
+  font-weight: bold;
+  line-height: 1.4;
+}
+.counts {
+  margin-top: 20px;
+}
+
+/* PC에서도 S, O가 흔들리지 않도록 고정 박스 생성 */
+.led-counts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 140px;
+}
+
+/* 칼각 정렬을 위한 CSS 로직 */
+.count-row {
+  display: flex;
+  align-items: center;
+  margin: 5px 0;
+  height: 40px;
+}
+
+.count-label {
+  color: white;
+  font-size: 2rem;
+  font-weight: bold;
+  width: 50px;
+  letter-spacing: 2px;
+  text-align: left;
+}
+
+.count-icons {
+  font-size: 1.5rem;
+  display: flex;
+  gap: 5px;
+}
+
+.game-over-text {
+  color: #e74c3c;
+  font-size: 2.2rem;
+  animation: blink 1s infinite;
+}
+
+/* 오른쪽 게임 캔버스 패널 */
+.canvas-panel {
+  flex: 1;
+  /* 💡 [핵심 수정] 이 한 줄이 z-index를 작동하게 만듭니다. */
   position: relative;
-  width: 100%;
-  flex-grow: 1;
+
   display: flex;
   justify-content: center;
   align-items: center;
-  overflow: hidden;
+  background-color: #27ae60; /* 경기장 바닥색 */
 }
 
-/* 🌟 핵심! 캔버스를 랩퍼 크기에 맞추되, 찌그러지지 않게 비율(contain) 유지 */
-.canvas-wrapper canvas {
+/* 💡 [추가] 물리 엔진에서 삭제한 흙 배경을 CSS로 구현 */
+.infield-dirt {
+  position: absolute;
+  bottom: -100px; /* 흙이 타석 아래에서 올라오게 위치 */
+  left: 50%;
+  transform: translateX(-50%);
+  width: 550px; /* 흙 원형의 크기 */
+  height: 550px;
+  background-color: #e67e22; /* 흙 색깔 */
+  border-radius: 50%; /* 완벽한 원형 */
+
+  /* 💡 [핵심] 타자 이미지 뒤, 캔버스 뒤에 배치 */
+  z-index: 1;
+}
+
+/* 🌟 투수/타자 이미지는 흙보다 위, 캔버스보다 아래에 배치 */
+.pitcher-img {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+
+  /* 💡 [핵심] 흙(z:1)보다는 위로, 캔버스(z:10)보다는 아래로 */
+  z-index: 2;
+}
+
+.batter-img {
+  position: absolute;
+  transform: translate(-50%, 0);
+  pointer-events: none;
+
+  /* 💡 [핵심] 흙(z:1)보다는 위로, 캔버스(z:10)보다는 아래로 */
+  z-index: 2;
+}
+
+.canvas-panel canvas {
+  position: relative;
   width: 100% !important;
   height: 100% !important;
-  object-fit: contain !important;
-  touch-action: none; /* 모바일 기본 터치 액션(스와이프 등) 차단 */
+  object-fit: contain;
+  touch-action: none;
+
+  /* 💡 [핵심 수정] 캔버스를 이미지 위로 띄움 (레이어 10) */
+  z-index: 10;
 }
 
-/* 안내 문구 오버레이 화면 가득 채우기 */
-.overlay-message {
-  position: absolute;
+/* App.css 맨 아래 추가 (기존 .overlay-message 관련 코드는 지워주세요!) */
+
+/* 🌟 물리 엔진과 상관없이 모니터 화면 전체를 덮어버리는 무적 레이어 */
+.fullscreen-overlay {
+  position: fixed; /* absolute가 아닌 fixed로 화면 전체 고정! */
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.6);
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.75);
   display: flex;
   justify-content: center;
   align-items: center;
-  color: #f1c40f;
-  text-align: center;
-  z-index: 10;
+  z-index: 999999 !important; /* 그 어떤 요소보다 무조건 최상단 보장 */
   pointer-events: none;
 }
 
-.overlay-message h2 {
-  font-size: 1.8rem;
-  padding: 20px;
-  background: rgba(0, 0, 0, 0.8);
-  border-radius: 10px;
+/* 🌟 글씨가 안 보일래야 안 보일 수 없는 강력한 디자인 */
+.overlay-text {
+  color: #ffffff !important; /* 눈부신 흰색 글씨 */
+  font-size: 3rem !important;
+  font-weight: bold;
+  background-color: #e74c3c !important; /* 강렬한 빨간색 박스 */
+  padding: 30px 50px;
+  border-radius: 20px;
+  border: 5px solid #f1c40f; /* 노란색 테두리 */
+  text-align: center;
   animation: blink 1.5s infinite;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+}
+
+/* 📱 모바일에서는 글자 크기 살짝 조절 */
+@media (max-width: 768px) {
+  .overlay-text {
+    font-size: 2rem !important;
+    padding: 20px 30px;
+  }
 }
 
 @keyframes blink {
@@ -77,5 +195,73 @@ body {
   }
   50% {
     opacity: 0.5;
+  }
+}
+
+/* 📱 모바일 반응형 */
+@media (max-width: 768px) {
+  .game-wrapper {
+    flex-direction: column;
+  }
+
+  .scoreboard-panel {
+    width: 100%;
+    height: auto;
+    min-height: 100px;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-right: none;
+    border-bottom: 3px solid #444;
+  }
+
+  .score-info {
+    flex: 1;
+  }
+  .score-info h1 {
+    font-size: 1.5rem;
+    margin-bottom: 5px;
+  }
+  .game-msg {
+    font-size: 1.1rem;
+    min-height: 25px;
+  }
+
+  .counts {
+    margin-top: 0;
+    flex: 1;
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .led-counts {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100px;
+  }
+
+  .count-row {
+    margin: 2px 0;
+    height: 30px;
+  }
+  .count-label {
+    font-size: 1.5rem;
+    width: 40px;
+  }
+  .count-icons {
+    font-size: 1.2rem;
+  }
+
+  .canvas-panel {
+    height: calc(100dvh - 100px);
+  }
+
+  /* 💡 모바일에서 흙 크기 축소 */
+  .infield-dirt {
+    width: 400px;
+    height: 400px;
+    bottom: -80px;
   }
 }

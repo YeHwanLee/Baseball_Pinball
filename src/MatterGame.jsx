@@ -3,38 +3,40 @@ import React, { useEffect, useRef } from 'react';
 import Matter from 'matter-js';
 
 const CONFIG = {
-  pitcher: { x: 300, y: 350 },
-  hrZone: { x: 300, y: 80, radius: 40 },
+  pitcher: { x: 300, y: 400 },
+  hrZone: [
+    { x: 200, y: 100, radius: 20 },
+    { x: 400, y: 100, radius: 20 },
+  ],
   tripleZones: [
-    { x: 150, y: 170, radius: 25 },
-    { x: 450, y: 170, radius: 25 },
+    { x: 150, y: 200, radius: 25 },
+    { x: 450, y: 200, radius: 25 },
   ],
   doubleZones: [
-    { x: 80, y: 320, radius: 20 },
-    { x: 520, y: 320, radius: 20 },
+    { x: 100, y: 400, radius: 20 },
+    { x: 500, y: 400, radius: 20 },
   ],
   singleZones: [
-    { x: 70, y: 500, radius: 20 },
-    { x: 530, y: 500, radius: 20 },
-  ],
-  flyOutZones: [
-    { x: 220, y: 250, radius: 25 },
-    { x: 380, y: 250, radius: 25 },
+    { x: 70, y: 600, radius: 20 },
+    { x: 530, y: 600, radius: 20 },
   ],
   foulZones: [
-    { x: 40, y: 600, radius: 30 },
-    { x: 560, y: 600, radius: 30 },
+    { x: 35, y: 810, radius: 30 },
+    { x: 565, y: 810, radius: 30 },
   ],
+
+  // 💡 [새로운 기능] 좌우로 움직이는 수비수 설정! (기존 flyOutZones 대체)
+  defenders: [
+    // x, y: 중심 좌표 / radius: 크기 / range: 좌우로 이동하는 픽셀 범위 / speed: 왕복 속도
+    { x: 150, y: 300, radius: 25, range: 60, speed: 0.05 }, // 좌익수 느낌
+    { x: 450, y: 300, radius: 25, range: 60, speed: 0.05 }, // 우익수 느낌
+  ],
+
   rails: [
-    { x: 100, y: 750, width: 250, angle: 35 },
-    { x: 500, y: 750, width: 250, angle: -35 },
+    { x: 100, y: 900, width: 250, angle: 35 },
+    { x: 500, y: 900, width: 250, angle: -35 },
   ],
-  bat: {
-    pivot: { x: 250, y: 720 },
-    angleUp: -35,
-    angleDown: 15,
-    speed: 0.25,
-  },
+  bat: { pivot: { x: 220, y: 920 }, angleUp: -35, angleDown: 20, speed: 0.16 },
 };
 
 const MatterGame = ({ onHit, gameState }) => {
@@ -42,9 +44,13 @@ const MatterGame = ({ onHit, gameState }) => {
   const engineRef = useRef(null);
   const isSwinging = useRef(false);
 
+  const onHitRef = useRef(onHit);
+  useEffect(() => {
+    onHitRef.current = onHit;
+  }, [onHit]);
+
   useEffect(() => {
     const { Engine, Render, Runner, Bodies, Composite, Events, Body } = Matter;
-
     const engine = Engine.create();
     engineRef.current = engine;
 
@@ -57,9 +63,9 @@ const MatterGame = ({ onHit, gameState }) => {
       engine: engine,
       options: {
         width: 600,
-        height: 800,
+        height: 1000,
         wireframes: false,
-        background: '#27ae60',
+        background: 'transparent',
       },
     });
 
@@ -68,14 +74,18 @@ const MatterGame = ({ onHit, gameState }) => {
       const angleStep = (endAngle - startAngle) / segments;
       for (let i = 0; i <= segments; i++) {
         const angle = startAngle + i * angleStep;
-        const x = cx + radius * Math.cos(angle);
-        const y = cy + radius * Math.sin(angle);
         walls.push(
-          Bodies.rectangle(x, y, radius * angleStep + 10, 30, {
-            isStatic: true,
-            angle: angle + Math.PI / 2,
-            render: { fillStyle: '#1e5f30' },
-          })
+          Bodies.rectangle(
+            cx + radius * Math.cos(angle),
+            cy + radius * Math.sin(angle),
+            radius * angleStep + 10,
+            30,
+            {
+              isStatic: true,
+              angle: angle + Math.PI / 2,
+              render: { fillStyle: '#1e5f30' },
+            }
+          )
         );
       }
       return walls;
@@ -83,29 +93,22 @@ const MatterGame = ({ onHit, gameState }) => {
 
     const outfieldWalls = createArcWalls(
       300,
-      750,
-      680,
+      950,
+      880,
       Math.PI + 0.2,
       2 * Math.PI - 0.2,
       30
     );
-
     const sideWalls = [
-      Bodies.rectangle(-10, 400, 40, 800, {
+      Bodies.rectangle(-10, 500, 40, 1500, {
         isStatic: true,
         render: { visible: false },
       }),
-      Bodies.rectangle(610, 400, 40, 800, {
+      Bodies.rectangle(610, 500, 40, 1500, {
         isStatic: true,
         render: { visible: false },
       }),
     ];
-
-    const infieldDirt = Bodies.circle(300, 850, 300, {
-      isStatic: true,
-      isSensor: true,
-      render: { fillStyle: '#e67e22' },
-    });
 
     const createHole = (pos, label, color) =>
       Bodies.circle(pos.x, pos.y, pos.radius, {
@@ -115,13 +118,25 @@ const MatterGame = ({ onHit, gameState }) => {
         render: { fillStyle: color, strokeStyle: '#000', lineWidth: 2 },
       });
 
+    // 💡 수비수(Defender) 바디 생성 (각자 다른 타이밍에 움직이도록 초기 시간(time)을 랜덤으로 부여)
+    const defenderBodies = CONFIG.defenders.map((def) => {
+      const body = Bodies.circle(def.x, def.y, def.radius, {
+        isSensor: true,
+        isStatic: true,
+        label: 'OUT',
+        render: { fillStyle: '#c0392b', strokeStyle: '#fff', lineWidth: 3 }, // 눈에 띄는 빨간색 테두리
+      });
+      return { body, config: def, time: Math.random() * Math.PI * 2 };
+    });
+
     const holes = [
-      createHole(CONFIG.hrZone, 'HR', '#f1c40f'),
+      ...CONFIG.hrZone.map((p) => createHole(p, 'HR', '#f1c40f')),
       ...CONFIG.tripleZones.map((p) => createHole(p, '3B', '#e67e22')),
       ...CONFIG.doubleZones.map((p) => createHole(p, '2B', '#3498db')),
       ...CONFIG.singleZones.map((p) => createHole(p, '1B', '#9b59b6')),
-      ...CONFIG.flyOutZones.map((p) => createHole(p, 'OUT', '#e74c3c')),
       ...CONFIG.foulZones.map((p) => createHole(p, 'FOUL', '#ecf0f1')),
+      // 💡 생성된 수비수 바디들을 월드에 추가하기 위해 배열에 합침
+      ...defenderBodies.map((d) => d.body),
     ];
 
     const rails = CONFIG.rails.map((r) =>
@@ -132,8 +147,7 @@ const MatterGame = ({ onHit, gameState }) => {
       })
     );
 
-    // 💡 [수정] 바닥으로 빠지는 구역의 라벨을 'STRIKE'로 변경
-    const strikeZone = Bodies.rectangle(300, 840, 600, 60, {
+    const strikeZone = Bodies.rectangle(300, 1060, 800, 100, {
       isSensor: true,
       isStatic: true,
       label: 'STRIKE',
@@ -153,11 +167,10 @@ const MatterGame = ({ onHit, gameState }) => {
 
     Composite.add(engine.world, [
       ...sideWalls,
-      infieldDirt,
       ...outfieldWalls,
       ...holes,
       ...rails,
-      strikeZone, // 💡 변경된 변수명 적용
+      strikeZone,
       bat,
     ]);
 
@@ -178,9 +191,7 @@ const MatterGame = ({ onHit, gameState }) => {
       Composite.add(engine.world, ball);
     };
 
-    if (gameState === 'PLAYING') {
-      pitchBall();
-    }
+    if (gameState === 'PLAYING') pitchBall();
 
     Events.on(engine, 'collisionStart', (event) => {
       event.pairs.forEach((pair) => {
@@ -189,15 +200,13 @@ const MatterGame = ({ onHit, gameState }) => {
           const ball = pair.bodyA.label === 'ball' ? pair.bodyA : pair.bodyB;
           const sensor = pair.bodyA.label === 'ball' ? pair.bodyB : pair.bodyA;
 
-          // 💡 [수정] 충돌 감지 목록에 'STRIKE' 추가
           if (
             ['HR', '3B', '2B', '1B', 'FOUL', 'OUT', 'STRIKE'].includes(
               sensor.label
-            ) &&
-            sensor !== infieldDirt
+            )
           ) {
             Composite.remove(engine.world, ball);
-            onHit(sensor.label);
+            onHitRef.current(sensor.label);
             if (gameState === 'PLAYING') setTimeout(pitchBall, 1200);
           }
         }
@@ -207,64 +216,63 @@ const MatterGame = ({ onHit, gameState }) => {
     const handleInputDown = (e) => {
       if (e.key === 'Enter' || e.type === 'touchstart') {
         if (e.key === 'Enter') e.preventDefault();
-        if (gameState === 'PLAYING') {
-          isSwinging.current = true;
-        }
+        if (gameState === 'PLAYING') isSwinging.current = true;
       }
-      if (e.code === 'Space' && gameState === 'PLAYING') pitchBall();
     };
-
     const handleInputUp = (e) => {
-      if (e.key === 'Enter' || e.type === 'touchend') {
+      if (e.key === 'Enter' || e.type === 'touchend')
         isSwinging.current = false;
-      }
     };
 
     window.addEventListener('keydown', handleInputDown, { passive: false });
     window.addEventListener('keyup', handleInputUp);
 
-    const canvasEl = canvasRef.current;
-    if (canvasEl) {
-      canvasEl.addEventListener('touchstart', handleInputDown, {
+    const currentCanvas = canvasRef.current;
+    if (currentCanvas) {
+      currentCanvas.addEventListener('touchstart', handleInputDown, {
         passive: false,
       });
-      canvasEl.addEventListener('touchend', handleInputUp);
+      currentCanvas.addEventListener('touchend', handleInputUp);
     }
 
     let currentAngle = initialAngleRad;
 
+    // 💡 매 프레임마다 실행되는 업데이트 루프
     Events.on(engine, 'beforeUpdate', () => {
+      // 1. 배트 회전 처리
       const targetAngle = isSwinging.current
         ? CONFIG.bat.angleUp * (Math.PI / 180)
         : CONFIG.bat.angleDown * (Math.PI / 180);
-
-      const speed = CONFIG.bat.speed;
+      const batSpeed = CONFIG.bat.speed;
       let nextAngle = currentAngle;
 
-      if (currentAngle > targetAngle) {
-        nextAngle = Math.max(currentAngle - speed, targetAngle);
-      } else if (currentAngle < targetAngle) {
-        nextAngle = Math.min(currentAngle + speed, targetAngle);
-      }
+      if (currentAngle > targetAngle)
+        nextAngle = Math.max(currentAngle - batSpeed, targetAngle);
+      else if (currentAngle < targetAngle)
+        nextAngle = Math.min(currentAngle + batSpeed, targetAngle);
 
       if (nextAngle !== currentAngle) {
         const prevX = bat.position.x;
         const prevY = bat.position.y;
-
         const newX = CONFIG.bat.pivot.x + batRadius * Math.cos(nextAngle);
         const newY = CONFIG.bat.pivot.y + batRadius * Math.sin(nextAngle);
-
         Body.setPosition(bat, { x: newX, y: newY });
         Body.setAngle(bat, nextAngle);
-
         Body.setVelocity(bat, { x: newX - prevX, y: newY - prevY });
         Body.setAngularVelocity(bat, nextAngle - currentAngle);
-
         currentAngle = nextAngle;
       } else {
         Body.setVelocity(bat, { x: 0, y: 0 });
         Body.setAngularVelocity(bat, 0);
       }
+
+      // 💡 2. 수비수 좌우 왕복 이동 처리
+      defenderBodies.forEach((def) => {
+        def.time += def.config.speed; // 시간에 속도를 더함
+        // 삼각함수(sin)를 이용하여 중심축(config.x)을 기준으로 range만큼 왔다갔다 함
+        const newX = def.config.x + Math.sin(def.time) * def.config.range;
+        Body.setPosition(def.body, { x: newX, y: def.config.y }); // Y축은 고정
+      });
     });
 
     Render.run(render);
@@ -274,15 +282,15 @@ const MatterGame = ({ onHit, gameState }) => {
     return () => {
       window.removeEventListener('keydown', handleInputDown);
       window.removeEventListener('keyup', handleInputUp);
-      if (canvasEl) {
-        canvasEl.removeEventListener('touchstart', handleInputDown);
-        canvasEl.removeEventListener('touchend', handleInputUp);
+      if (currentCanvas) {
+        currentCanvas.removeEventListener('touchstart', handleInputDown);
+        currentCanvas.removeEventListener('touchend', handleInputUp);
       }
       Render.stop(render);
       Runner.stop(runner);
       Engine.clear(engine);
     };
-  }, [gameState, onHit]);
+  }, [gameState]);
 
   return (
     <canvas
@@ -290,8 +298,9 @@ const MatterGame = ({ onHit, gameState }) => {
       style={{
         width: '100%',
         height: '100%',
-        display: 'block',
-        touchAction: 'none',
+        objectFit: 'contain',
+        position: 'relative',
+        zIndex: 10,
       }}
     />
   );

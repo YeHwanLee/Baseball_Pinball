@@ -3,6 +3,14 @@ import React, { useState, useEffect } from 'react';
 import MatterGame from './MatterGame';
 import './App.css';
 
+import pitcherImg from './assets/pitcher.png';
+import batterImg from './assets/batter.png';
+
+const UI_CONFIG = {
+  pitcher: { top: '40%', left: '50%', width: '60px' },
+  batter: { bottom: '8%', left: '35%', width: '80px' },
+};
+
 function App() {
   const [score, setScore] = useState(0);
   const [outs, setOuts] = useState(0);
@@ -10,7 +18,6 @@ function App() {
   const [gameState, setGameState] = useState('READY');
   const [message, setMessage] = useState('');
 
-  // 💡 상태 업데이트를 밖으로 빼서 독립적으로 처리합니다.
   const handleHit = (type) => {
     if (gameState !== 'PLAYING') return;
 
@@ -28,9 +35,8 @@ function App() {
         setScore((s) => s + 10);
         setMessage('안타!');
       }
-      setStrikes(0); // 안타 시 스트라이크 초기화
+      setStrikes(0);
     } else if (type === 'FOUL') {
-      // 💡 파울 규칙: 2스트라이크 전까지만 카운트 증가
       if (strikes < 2) {
         setStrikes((s) => s + 1);
         setMessage('파울! (스트라이크)');
@@ -38,12 +44,11 @@ function App() {
         setMessage('파울! (투스트라이크 유지)');
       }
     } else if (type === 'STRIKE') {
-      // 💡 삼진 아웃 로직: 먼저 판단 후 상태 변경
       const nextStrikes = strikes + 1;
       if (nextStrikes >= 3) {
         setMessage('삼진 아웃!');
         setStrikes(0);
-        processOut(); // 아웃 카운트 증가 함수 호출
+        processOut();
       } else {
         setMessage('스트라이크!');
         setStrikes(nextStrikes);
@@ -54,7 +59,6 @@ function App() {
     }
   };
 
-  // 아웃 카운트 증가 및 게임 오버 판단만 담당하는 함수
   const processOut = () => {
     setOuts((o) => {
       const newOuts = o + 1;
@@ -87,39 +91,61 @@ function App() {
   }, [gameState]);
 
   return (
-    <div className="game-container">
-      <div className="scoreboard">
-        <div className="score-area">
+    <div className="game-wrapper">
+      {/* 💡 [핵심 해결] 게임판에 종속되지 않는 무적의 전체 화면 오버레이! */}
+      {gameState === 'READY' && (
+        <div className="fullscreen-overlay">
+          <h2 className="overlay-text">엔터를 눌러서 시작하세요</h2>
+        </div>
+      )}
+      {gameState === 'GAMEOVER' && (
+        <div className="fullscreen-overlay">
+          <h2 className="overlay-text">
+            게임 오버!
+            <br />
+            엔터로 재시작
+          </h2>
+        </div>
+      )}
+
+      <div className="scoreboard-panel">
+        <div className="score-info">
           <h1>SCORE: {score}</h1>
           <p className="game-msg">{message}</p>
         </div>
-        <div className="out-area">
+        <div className="counts">
           {gameState === 'GAMEOVER' ? (
-            <h2>GAME OVER</h2>
+            <h2 className="game-over-text">GAME OVER</h2>
           ) : (
-            <>
-              <h2 style={{ color: '#f1c40f' }}>S: {'🟡'.repeat(strikes)}</h2>
-              <h2 style={{ color: '#e74c3c' }}>O: {'🔴'.repeat(outs)}</h2>
-            </>
+            <div className="led-counts">
+              <div className="count-row">
+                <span className="count-label">S:</span>
+                <span className="count-icons">{'🟡'.repeat(strikes)}</span>
+              </div>
+              <div className="count-row">
+                <span className="count-label">O:</span>
+                <span className="count-icons">{'🔴'.repeat(outs)}</span>
+              </div>
+            </div>
           )}
         </div>
       </div>
 
-      <div className="canvas-wrapper">
-        {gameState === 'READY' && (
-          <div className="overlay-message">
-            <h2>엔터를 누르면 시작합니다</h2>
-          </div>
-        )}
-        {gameState === 'GAMEOVER' && (
-          <div className="overlay-message">
-            <h2>
-              게임 오버!
-              <br />
-              엔터로 재시작
-            </h2>
-          </div>
-        )}
+      <div className="canvas-panel">
+        <div className="infield-dirt"></div>
+        <img
+          src={pitcherImg}
+          alt="투수"
+          className="pitcher-img"
+          style={UI_CONFIG.pitcher}
+        />
+        <img
+          src={batterImg}
+          alt="타자"
+          className="batter-img"
+          style={UI_CONFIG.batter}
+        />
+
         <MatterGame onHit={handleHit} gameState={gameState} />
       </div>
     </div>
