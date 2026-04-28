@@ -4,37 +4,40 @@ import Matter from 'matter-js';
 
 const CONFIG = {
   pitcher: { x: 300, y: 350 },
-  hrZone: { x: 300, y: 100, radius: 40 },
+  hrZone: { x: 300, y: 80, radius: 40 },
   tripleZones: [
-    { x: 120, y: 180, radius: 25 },
-    { x: 480, y: 180, radius: 25 },
+    { x: 150, y: 170, radius: 25 },
+    { x: 450, y: 170, radius: 25 },
   ],
   doubleZones: [
-    { x: 70, y: 350, radius: 20 },
-    { x: 530, y: 350, radius: 20 },
+    { x: 80, y: 320, radius: 20 },
+    { x: 520, y: 320, radius: 20 },
   ],
   singleZones: [
-    { x: 60, y: 550, radius: 20 },
-    { x: 540, y: 550, radius: 20 },
+    { x: 70, y: 500, radius: 20 },
+    { x: 530, y: 500, radius: 20 },
   ],
   flyOutZones: [
     { x: 220, y: 250, radius: 25 },
     { x: 380, y: 250, radius: 25 },
   ],
+  foulZones: [
+    { x: 40, y: 600, radius: 30 },
+    { x: 560, y: 600, radius: 30 },
+  ],
   rails: [
     { x: 100, y: 750, width: 250, angle: 35 },
     { x: 500, y: 750, width: 250, angle: -35 },
   ],
-
   bat: {
     pivot: { x: 250, y: 720 },
-    angleUp: -35, // 스윙 최대 각도 (음수가 반시계, 즉 위로 올라감)
-    angleDown: 15, // 대기 각도 (양수가 시계, 즉 아래로 처짐)
-    speed: 0.25, // 스윙 속도
+    angleUp: -35,
+    angleDown: 15,
+    speed: 0.25,
   },
 };
 
-const MatterGame = ({ onHit, isGameOver, onRetry }) => {
+const MatterGame = ({ onHit, gameState }) => {
   const canvasRef = useRef(null);
   const engineRef = useRef(null);
   const isSwinging = useRef(false);
@@ -45,7 +48,6 @@ const MatterGame = ({ onHit, isGameOver, onRetry }) => {
     const engine = Engine.create();
     engineRef.current = engine;
 
-    // 벽 뚫기 방지 세팅
     engine.positionIterations = 10;
     engine.velocityIterations = 10;
     engine.gravity.y = 1.2;
@@ -57,31 +59,60 @@ const MatterGame = ({ onHit, isGameOver, onRetry }) => {
         width: 600,
         height: 800,
         wireframes: false,
-        background: 'transparent',
+        background: '#27ae60',
       },
     });
 
-    const walls = [
+    const createArcWalls = (cx, cy, radius, startAngle, endAngle, segments) => {
+      const walls = [];
+      const angleStep = (endAngle - startAngle) / segments;
+      for (let i = 0; i <= segments; i++) {
+        const angle = startAngle + i * angleStep;
+        const x = cx + radius * Math.cos(angle);
+        const y = cy + radius * Math.sin(angle);
+        walls.push(
+          Bodies.rectangle(x, y, radius * angleStep + 10, 30, {
+            isStatic: true,
+            angle: angle + Math.PI / 2,
+            render: { fillStyle: '#1e5f30' },
+          })
+        );
+      }
+      return walls;
+    };
+
+    const outfieldWalls = createArcWalls(
+      300,
+      750,
+      680,
+      Math.PI + 0.2,
+      2 * Math.PI - 0.2,
+      30
+    );
+
+    const sideWalls = [
       Bodies.rectangle(-10, 400, 40, 800, {
         isStatic: true,
-        render: { fillStyle: '#2c3e50' },
+        render: { visible: false },
       }),
       Bodies.rectangle(610, 400, 40, 800, {
         isStatic: true,
-        render: { fillStyle: '#2c3e50' },
-      }),
-      Bodies.rectangle(300, -10, 600, 40, {
-        isStatic: true,
-        render: { fillStyle: '#2c3e50' },
+        render: { visible: false },
       }),
     ];
+
+    const infieldDirt = Bodies.circle(300, 850, 300, {
+      isStatic: true,
+      isSensor: true,
+      render: { fillStyle: '#e67e22' },
+    });
 
     const createHole = (pos, label, color) =>
       Bodies.circle(pos.x, pos.y, pos.radius, {
         isSensor: true,
         isStatic: true,
         label,
-        render: { fillStyle: color },
+        render: { fillStyle: color, strokeStyle: '#000', lineWidth: 2 },
       });
 
     const holes = [
@@ -90,23 +121,24 @@ const MatterGame = ({ onHit, isGameOver, onRetry }) => {
       ...CONFIG.doubleZones.map((p) => createHole(p, '2B', '#3498db')),
       ...CONFIG.singleZones.map((p) => createHole(p, '1B', '#9b59b6')),
       ...CONFIG.flyOutZones.map((p) => createHole(p, 'OUT', '#e74c3c')),
+      ...CONFIG.foulZones.map((p) => createHole(p, 'FOUL', '#ecf0f1')),
     ];
 
     const rails = CONFIG.rails.map((r) =>
       Bodies.rectangle(r.x, r.y, r.width, 20, {
         isStatic: true,
         angle: r.angle * (Math.PI / 180),
-        render: { fillStyle: '#c0392b' },
+        render: { fillStyle: '#ecf0f1' },
       })
     );
 
-    const outZone = Bodies.rectangle(300, 840, 600, 60, {
+    // 💡 [수정] 바닥으로 빠지는 구역의 라벨을 'STRIKE'로 변경
+    const strikeZone = Bodies.rectangle(300, 840, 600, 60, {
       isSensor: true,
       isStatic: true,
-      label: 'OUT',
+      label: 'STRIKE',
     });
 
-    // 💡 [수정됨] 배트를 처음 생성할 때부터 0도가 아닌 '대기 각도(angleDown)'로 맞춰서 생성합니다.
     const batRadius = 60;
     const initialAngleRad = CONFIG.bat.angleDown * (Math.PI / 180);
     const initialX = CONFIG.bat.pivot.x + batRadius * Math.cos(initialAngleRad);
@@ -115,14 +147,22 @@ const MatterGame = ({ onHit, isGameOver, onRetry }) => {
     const bat = Bodies.rectangle(initialX, initialY, 140, 24, {
       label: 'bat',
       isStatic: true,
-      angle: initialAngleRad, // 시작부터 완벽한 각도 부여!
+      angle: initialAngleRad,
       render: { fillStyle: '#d35400' },
     });
 
-    Composite.add(engine.world, [...walls, ...holes, ...rails, outZone, bat]);
+    Composite.add(engine.world, [
+      ...sideWalls,
+      infieldDirt,
+      ...outfieldWalls,
+      ...holes,
+      ...rails,
+      strikeZone, // 💡 변경된 변수명 적용
+      bat,
+    ]);
 
     const pitchBall = () => {
-      if (isGameOver) return;
+      if (gameState !== 'PLAYING') return;
       const ball = Bodies.circle(
         CONFIG.pitcher.x + (Math.random() * 40 - 20),
         CONFIG.pitcher.y,
@@ -138,7 +178,9 @@ const MatterGame = ({ onHit, isGameOver, onRetry }) => {
       Composite.add(engine.world, ball);
     };
 
-    if (!isGameOver) pitchBall();
+    if (gameState === 'PLAYING') {
+      pitchBall();
+    }
 
     Events.on(engine, 'collisionStart', (event) => {
       event.pairs.forEach((pair) => {
@@ -147,34 +189,48 @@ const MatterGame = ({ onHit, isGameOver, onRetry }) => {
           const ball = pair.bodyA.label === 'ball' ? pair.bodyA : pair.bodyB;
           const sensor = pair.bodyA.label === 'ball' ? pair.bodyB : pair.bodyA;
 
-          if (['HR', '3B', '2B', '1B', 'OUT'].includes(sensor.label)) {
+          // 💡 [수정] 충돌 감지 목록에 'STRIKE' 추가
+          if (
+            ['HR', '3B', '2B', '1B', 'FOUL', 'OUT', 'STRIKE'].includes(
+              sensor.label
+            ) &&
+            sensor !== infieldDirt
+          ) {
             Composite.remove(engine.world, ball);
             onHit(sensor.label);
-            if (!isGameOver) setTimeout(pitchBall, 1200);
+            if (gameState === 'PLAYING') setTimeout(pitchBall, 1200);
           }
         }
       });
     });
 
-    const handleKeyDown = (e) => {
-      if (e.key === 'Enter') {
-        if (isGameOver) {
-          onRetry();
-          return;
+    const handleInputDown = (e) => {
+      if (e.key === 'Enter' || e.type === 'touchstart') {
+        if (e.key === 'Enter') e.preventDefault();
+        if (gameState === 'PLAYING') {
+          isSwinging.current = true;
         }
-        isSwinging.current = true;
       }
-      if (e.code === 'Space' && !isGameOver) pitchBall();
+      if (e.code === 'Space' && gameState === 'PLAYING') pitchBall();
     };
 
-    const handleKeyUp = (e) => {
-      if (e.key === 'Enter') isSwinging.current = false;
+    const handleInputUp = (e) => {
+      if (e.key === 'Enter' || e.type === 'touchend') {
+        isSwinging.current = false;
+      }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('keydown', handleInputDown, { passive: false });
+    window.addEventListener('keyup', handleInputUp);
 
-    // 내부 계산용 변수도 초기 시작 각도와 똑같이 맞춰줍니다.
+    const canvasEl = canvasRef.current;
+    if (canvasEl) {
+      canvasEl.addEventListener('touchstart', handleInputDown, {
+        passive: false,
+      });
+      canvasEl.addEventListener('touchend', handleInputUp);
+    }
+
     let currentAngle = initialAngleRad;
 
     Events.on(engine, 'beforeUpdate', () => {
@@ -216,18 +272,27 @@ const MatterGame = ({ onHit, isGameOver, onRetry }) => {
     Runner.run(runner, engine);
 
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('keydown', handleInputDown);
+      window.removeEventListener('keyup', handleInputUp);
+      if (canvasEl) {
+        canvasEl.removeEventListener('touchstart', handleInputDown);
+        canvasEl.removeEventListener('touchend', handleInputUp);
+      }
       Render.stop(render);
       Runner.stop(runner);
       Engine.clear(engine);
     };
-  }, [isGameOver, onHit, onRetry]);
+  }, [gameState, onHit]);
 
   return (
     <canvas
       ref={canvasRef}
-      style={{ width: '100%', height: '100%', display: 'block' }}
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'block',
+        touchAction: 'none',
+      }}
     />
   );
 };
