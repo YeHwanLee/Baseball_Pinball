@@ -6,28 +6,28 @@ import { PROCON_CONFIG } from './App';
 const CONFIG = {
   pitcher: { x: 300, y: 400 },
   hrZone: [
-    { x: 200, y: 100, radius: 20 },
-    { x: 400, y: 100, radius: 20 },
+    { x: 250, y: 100, radius: 20 },
+    { x: 350, y: 100, radius: 20 },
   ],
   tripleZones: [
-    { x: 150, y: 200, radius: 20 },
-    { x: 450, y: 200, radius: 20 },
+    { x: 150, y: 350, radius: 20 },
+    { x: 450, y: 350, radius: 20 },
   ],
   doubleZones: [
-    { x: 100, y: 400, radius: 20 },
-    { x: 500, y: 400, radius: 20 },
+    { x: 100, y: 450, radius: 20 },
+    { x: 500, y: 450, radius: 20 },
   ],
   singleZones: [
-    { x: 70, y: 600, radius: 20 },
-    { x: 530, y: 600, radius: 20 },
+    { x: 70, y: 550, radius: 20 },
+    { x: 530, y: 550, radius: 20 },
   ],
   foulZones: [
     { x: 35, y: 710, radius: 30 },
     { x: 565, y: 710, radius: 30 },
   ],
   defenders: [
-    { x: 150, y: 300, radius: 25, range: 60, speed: 0.05 },
-    { x: 450, y: 300, radius: 25, range: 60, speed: 0.05 },
+    { x: 150, y: 250, radius: 25, range: 60, speed: 0.05 },
+    { x: 450, y: 250, radius: 25, range: 60, speed: 0.05 },
     // { x: 150, y: 500, radius: 12, range: 60, speed: 0.025 },
     // { x: 450, y: 500, radius: 12, range: 60, speed: 0.025 },
   ],
