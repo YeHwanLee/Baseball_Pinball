@@ -28,6 +28,8 @@ const CONFIG = {
   defenders: [
     { x: 150, y: 300, radius: 25, range: 60, speed: 0.05 },
     { x: 450, y: 300, radius: 25, range: 60, speed: 0.05 },
+    // { x: 150, y: 500, radius: 12, range: 60, speed: 0.025 },
+    // { x: 450, y: 500, radius: 12, range: 60, speed: 0.025 },
   ],
   rails: [
     { x: 100, y: 800, width: 250, angle: 35 },
