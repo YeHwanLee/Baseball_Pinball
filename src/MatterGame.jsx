@@ -26,8 +26,8 @@ const CONFIG = {
     { x: 565, y: 710, radius: 30 },
   ],
   defenders: [
-    { x: 150, y: 250, radius: 25, range: 60, speed: 0.05 },
-    { x: 450, y: 250, radius: 25, range: 60, speed: 0.05 },
+    { x: 150, y: 225, radius: 25, range: 60, speed: 0.05 },
+    { x: 450, y: 225, radius: 25, range: 60, speed: 0.05 },
     // { x: 150, y: 500, radius: 12, range: 60, speed: 0.025 },
     // { x: 450, y: 500, radius: 12, range: 60, speed: 0.025 },
   ],
