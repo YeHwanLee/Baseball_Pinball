@@ -1,7 +1,7 @@
 // MatterGame.jsx
 import React, { useEffect, useRef } from 'react';
 import Matter from 'matter-js';
-import { PROCON_CONFIG } from './App'; // 💡 App.jsx에서 만든 프로콘 설정을 불러옵니다.
+import { PROCON_CONFIG } from './App';
 
 const CONFIG = {
   pitcher: { x: 300, y: 400 },
@@ -10,8 +10,8 @@ const CONFIG = {
     { x: 400, y: 100, radius: 20 },
   ],
   tripleZones: [
-    { x: 150, y: 200, radius: 25 },
-    { x: 450, y: 200, radius: 25 },
+    { x: 150, y: 200, radius: 20 },
+    { x: 450, y: 200, radius: 20 },
   ],
   doubleZones: [
     { x: 100, y: 400, radius: 20 },
@@ -22,16 +22,16 @@ const CONFIG = {
     { x: 530, y: 600, radius: 20 },
   ],
   foulZones: [
-    { x: 35, y: 810, radius: 30 },
-    { x: 565, y: 810, radius: 30 },
+    { x: 35, y: 710, radius: 30 },
+    { x: 565, y: 710, radius: 30 },
   ],
   defenders: [
     { x: 150, y: 300, radius: 25, range: 60, speed: 0.05 },
     { x: 450, y: 300, radius: 25, range: 60, speed: 0.05 },
   ],
   rails: [
-    { x: 100, y: 905, width: 250, angle: 35 },
-    { x: 500, y: 905, width: 250, angle: -35 },
+    { x: 100, y: 800, width: 250, angle: 35 },
+    { x: 500, y: 800, width: 250, angle: -35 },
   ],
   bat: { pivot: { x: 220, y: 920 }, angleUp: -35, angleDown: 20, speed: 0.16 },
 };
@@ -39,12 +39,33 @@ const CONFIG = {
 const MatterGame = ({ onHit, gameState }) => {
   const canvasRef = useRef(null);
   const engineRef = useRef(null);
-  const isSwinging = useRef(false); // 키보드/터치용 상태
+  const isSwinging = useRef(false);
+
+  const pitchStateRef = useRef('WAITING_PITCH');
+  const pitchTimeoutRef = useRef(null);
 
   const onHitRef = useRef(onHit);
   useEffect(() => {
     onHitRef.current = onHit;
   }, [onHit]);
+
+  useEffect(() => {
+    if (gameState === 'PLAYING') {
+      pitchStateRef.current = 'PREPARING';
+      const randomDelay = Math.random() * 2000 + 1000;
+      pitchTimeoutRef.current = setTimeout(() => {
+        pitchBall();
+      }, randomDelay);
+    } else {
+      if (pitchTimeoutRef.current) clearTimeout(pitchTimeoutRef.current);
+    }
+  }, [gameState]);
+
+  const pitchBallRef = useRef(null);
+
+  const pitchBall = () => {
+    if (pitchBallRef.current) pitchBallRef.current();
+  };
 
   useEffect(() => {
     const { Engine, Render, Runner, Bodies, Composite, Events, Body } = Matter;
@@ -76,11 +97,11 @@ const MatterGame = ({ onHit, gameState }) => {
             cx + radius * Math.cos(angle),
             cy + radius * Math.sin(angle),
             radius * angleStep + 10,
-            30,
+            45,
             {
               isStatic: true,
               angle: angle + Math.PI / 2,
-              render: { fillStyle: '#1e5f30' },
+              render: { fillStyle: '#144d22' },
             }
           )
         );
@@ -107,12 +128,13 @@ const MatterGame = ({ onHit, gameState }) => {
       }),
     ];
 
+    // 💡 테두리 굵기를 6으로 적당하게 줄임
     const createHole = (pos, label, color) =>
       Bodies.circle(pos.x, pos.y, pos.radius, {
         isSensor: true,
         isStatic: true,
         label,
-        render: { fillStyle: color, strokeStyle: '#000', lineWidth: 2 },
+        render: { fillStyle: '#111111', strokeStyle: color, lineWidth: 6 },
       });
 
     const defenderBodies = CONFIG.defenders.map((def) => {
@@ -120,7 +142,7 @@ const MatterGame = ({ onHit, gameState }) => {
         isSensor: true,
         isStatic: true,
         label: 'OUT',
-        render: { fillStyle: '#c0392b', strokeStyle: '#fff', lineWidth: 3 },
+        render: { fillStyle: '#111111', strokeStyle: '#e74c3c', lineWidth: 6 },
       });
       return { body, config: def, time: Math.random() * Math.PI * 2 };
     });
@@ -130,7 +152,7 @@ const MatterGame = ({ onHit, gameState }) => {
       ...CONFIG.tripleZones.map((p) => createHole(p, '3B', '#e67e22')),
       ...CONFIG.doubleZones.map((p) => createHole(p, '2B', '#3498db')),
       ...CONFIG.singleZones.map((p) => createHole(p, '1B', '#9b59b6')),
-      ...CONFIG.foulZones.map((p) => createHole(p, 'FOUL', '#ecf0f1')),
+      ...CONFIG.foulZones.map((p) => createHole(p, 'FOUL', '#ecf0f1')), // 파울은 원래 흰색 유지
       ...defenderBodies.map((d) => d.body),
     ];
 
@@ -138,7 +160,7 @@ const MatterGame = ({ onHit, gameState }) => {
       Bodies.rectangle(r.x, r.y, r.width, 20, {
         isStatic: true,
         angle: r.angle * (Math.PI / 180),
-        render: { fillStyle: '#ecf0f1' },
+        render: { fillStyle: '#ffffff' },
       })
     );
 
@@ -169,7 +191,32 @@ const MatterGame = ({ onHit, gameState }) => {
       bat,
     ]);
 
-    const pitchBall = () => {
+    // 💡 네온 밝기(shadowBlur)를 10으로 줄여서 은은하게
+    Events.on(render, 'afterRender', () => {
+      const ctx = render.context;
+
+      holes.forEach((hole) => {
+        ctx.beginPath();
+        ctx.arc(
+          hole.position.x,
+          hole.position.y,
+          hole.circleRadius,
+          0,
+          2 * Math.PI
+        );
+        ctx.lineWidth = hole.render.lineWidth;
+        ctx.strokeStyle = hole.render.strokeStyle;
+
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = hole.render.strokeStyle;
+
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      });
+    });
+
+    // 여기서부터 끊겼던 코드입니다!
+    pitchBallRef.current = () => {
       if (gameState !== 'PLAYING') return;
       const ball = Bodies.circle(
         CONFIG.pitcher.x + (Math.random() * 40 - 20),
@@ -184,9 +231,8 @@ const MatterGame = ({ onHit, gameState }) => {
         }
       );
       Composite.add(engine.world, ball);
+      pitchStateRef.current = 'PITCHING';
     };
-
-    if (gameState === 'PLAYING') pitchBall();
 
     Events.on(engine, 'collisionStart', (event) => {
       event.pairs.forEach((pair) => {
@@ -202,19 +248,18 @@ const MatterGame = ({ onHit, gameState }) => {
           ) {
             Composite.remove(engine.world, ball);
             onHitRef.current(sensor.label);
-            if (gameState === 'PLAYING') setTimeout(pitchBall, 1200);
           }
         }
       });
     });
 
-    // 기존의 키보드 & 터치 입력
     const handleInputDown = (e) => {
       if (e.key === 'Enter' || e.type === 'touchstart') {
         if (e.key === 'Enter') e.preventDefault();
         if (gameState === 'PLAYING') isSwinging.current = true;
       }
     };
+
     const handleInputUp = (e) => {
       if (e.key === 'Enter' || e.type === 'touchend')
         isSwinging.current = false;
@@ -233,9 +278,7 @@ const MatterGame = ({ onHit, gameState }) => {
 
     let currentAngle = initialAngleRad;
 
-    // 💡 매 프레임마다 실행되는 물리 업데이트 루프
     Events.on(engine, 'beforeUpdate', () => {
-      // 💡 [추가] 프로콘 버튼이 눌려있는지 확인
       let isGamepadPressed = false;
       const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
       for (let gp of gamepads) {
@@ -249,8 +292,12 @@ const MatterGame = ({ onHit, gameState }) => {
         }
       }
 
-      // 키보드/터치(isSwinging.current) 또는 프로콘(isGamepadPressed) 둘 중 하나라도 눌리면 스윙!
-      const isSwingingNow = isSwinging.current || isGamepadPressed;
+      let isGamepadSwinging = false;
+      if (isGamepadPressed && gameState === 'PLAYING') {
+        isGamepadSwinging = true;
+      }
+
+      const isSwingingNow = isSwinging.current || isGamepadSwinging;
 
       const targetAngle = isSwingingNow
         ? CONFIG.bat.angleUp * (Math.PI / 180)
@@ -296,6 +343,7 @@ const MatterGame = ({ onHit, gameState }) => {
         currentCanvas.removeEventListener('touchstart', handleInputDown);
         currentCanvas.removeEventListener('touchend', handleInputUp);
       }
+      pitchBallRef.current = null;
       Render.stop(render);
       Runner.stop(runner);
       Engine.clear(engine);

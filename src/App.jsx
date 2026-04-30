@@ -7,34 +7,34 @@ import pitcherImg from './assets/pitcher.png';
 import batterImg from './assets/batter.png';
 
 const UI_CONFIG = {
-  pitcher: { top: '40%', left: '50%', width: '60px' },
-  batter: { bottom: '8%', left: '35%', width: '80px' },
+  pitcher: { top: '38%', left: '50%', width: '20%' },
+  batter: { bottom: '0%', left: '32%', width: '20%' },
 };
 
-// 🎮 [프로콘 설정창] 집에 가셔서 이 숫자들만 바꾸면서 테스트하시면 됩니다!
 export const PROCON_CONFIG = {
-  // 웹 브라우저에서 프로콘을 연결했을 때 일반적인 버튼 번호 (OS마다 다를 수 있음)
-  // 0: B 버튼 (오른쪽 패드 아래)
-  // 1: A 버튼 (오른쪽 패드 오른쪽)
-  // 2: Y 버튼 (오른쪽 패드 왼쪽)
-  // 3: X 버튼 (오른쪽 패드 위)
-  // 6: ZL (왼쪽 뒤 트리거)
-  // 7: ZR (오른쪽 뒤 트리거)
-
-  // 배열 안에 원하는 버튼 번호를 다 적어두면, 그 중 하나만 눌러도 작동합니다.
-  actionButtons: [0, 1, 7], // 기본값: B, A, ZR
+  actionButtons: [0, 1, 7],
 };
 
 function App() {
   const [score, setScore] = useState(0);
   const [outs, setOuts] = useState(0);
   const [strikes, setStrikes] = useState(0);
-  const [gameState, setGameState] = useState('READY');
+  const [gameState, setGameState] = useState('IDLE');
   const [message, setMessage] = useState('');
-  const [canRestart, setCanRestart] = useState(true);
 
-  // 패드 버튼이 계속 눌려있을 때 연타로 인식되는 것을 막기 위한 변수
+  const [canProceed, setCanProceed] = useState(true);
+  const [effectType, setEffectType] = useState('NONE');
+
   const wasGamepadPressed = useRef(false);
+
+  const triggerDelay = (nextState, currentEffect = 'NONE') => {
+    setEffectType(currentEffect);
+    setGameState(nextState);
+    setCanProceed(false);
+    setTimeout(() => {
+      setCanProceed(true);
+    }, 2500);
+  };
 
   const handleHit = (type) => {
     if (gameState !== 'PLAYING') return;
@@ -54,6 +54,7 @@ function App() {
         setMessage('안타!');
       }
       setStrikes(0);
+      triggerDelay('TURN_RESULT', 'HIT');
     } else if (type === 'FOUL') {
       if (strikes < 2) {
         setStrikes((s) => s + 1);
@@ -61,15 +62,19 @@ function App() {
       } else {
         setMessage('파울! (투스트라이크 유지)');
       }
+      // 💡 [수정] 파울일 때 노란색 배경(STRIKE)을 띄웁니다!
+      triggerDelay('TURN_RESULT', 'STRIKE');
     } else if (type === 'STRIKE') {
       const nextStrikes = strikes + 1;
       if (nextStrikes >= 3) {
         setMessage('삼진 아웃!');
         setStrikes(0);
-        processOut();
+        processOut(); // 삼진 아웃은 processOut을 타면서 OUT(빨간색)이 됩니다.
       } else {
         setMessage('스트라이크!');
         setStrikes(nextStrikes);
+        // 💡 [수정] 1~2 스트라이크일 때 노란색 배경(STRIKE)을 띄웁니다!
+        triggerDelay('TURN_RESULT', 'STRIKE');
       }
     } else if (type === 'OUT') {
       setMessage('플라이 아웃!');
@@ -81,11 +86,9 @@ function App() {
     setOuts((o) => {
       const newOuts = o + 1;
       if (newOuts >= 3) {
-        setGameState('GAMEOVER');
-        setCanRestart(false);
-        setTimeout(() => {
-          setCanRestart(true);
-        }, 2500);
+        triggerDelay('GAMEOVER', 'OUT');
+      } else {
+        triggerDelay('TURN_RESULT', 'OUT');
       }
       return newOuts;
     });
@@ -93,25 +96,45 @@ function App() {
   };
 
   const handleStartOrRetry = () => {
-    if (!canRestart) return;
+    if (!canProceed) return;
     setScore(0);
     setOuts(0);
     setStrikes(0);
     setMessage('플레이!');
+    setEffectType('NONE');
+    setGameState('PLAYING');
+  };
+
+  const handleContinueTurn = () => {
+    if (!canProceed) return;
+    setMessage('플레이!');
+    setEffectType('NONE');
     setGameState('PLAYING');
   };
 
   useEffect(() => {
     const handleStartInput = (e) => {
       if (e.key === 'Enter' || e.type === 'touchstart') {
-        if (gameState !== 'PLAYING' && canRestart) handleStartOrRetry();
+        if (e.key === 'Enter') e.preventDefault();
+
+        if (gameState === 'IDLE') {
+          setGameState('READY');
+          setCanProceed(false);
+          setTimeout(() => setCanProceed(true), 800);
+        } else if (
+          (gameState === 'READY' || gameState === 'GAMEOVER') &&
+          canProceed
+        ) {
+          handleStartOrRetry();
+        } else if (gameState === 'TURN_RESULT' && canProceed) {
+          handleContinueTurn();
+        }
       }
     };
 
-    window.addEventListener('keydown', handleStartInput);
-    window.addEventListener('touchstart', handleStartInput);
+    window.addEventListener('keydown', handleStartInput, { passive: false });
+    window.addEventListener('touchstart', handleStartInput, { passive: false });
 
-    // 💡 [추가] 프로콘 버튼 감지 루프 (게임 시작용)
     let animationFrameId;
     const pollGamepad = () => {
       const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
@@ -128,41 +151,109 @@ function App() {
         }
       }
 
-      // 방금 막 눌렀을 때만(Edge Detection) 실행하여 무한 재시작 방지
       if (isPressedNow && !wasGamepadPressed.current) {
-        if (gameState !== 'PLAYING' && canRestart) handleStartOrRetry();
+        if (gameState === 'IDLE') {
+          setGameState('READY');
+          setCanProceed(false);
+          setTimeout(() => setCanProceed(true), 800);
+        } else if (
+          (gameState === 'READY' || gameState === 'GAMEOVER') &&
+          canProceed
+        ) {
+          handleStartOrRetry();
+        } else if (gameState === 'TURN_RESULT' && canProceed) {
+          handleContinueTurn();
+        }
       }
       wasGamepadPressed.current = isPressedNow;
 
       animationFrameId = requestAnimationFrame(pollGamepad);
     };
-    pollGamepad(); // 루프 시작
+    pollGamepad();
 
     return () => {
       window.removeEventListener('keydown', handleStartInput);
       window.removeEventListener('touchstart', handleStartInput);
       cancelAnimationFrame(animationFrameId);
     };
-  }, [gameState, canRestart]);
+  }, [gameState, canProceed]);
 
   return (
     <div className="game-wrapper">
-      {gameState === 'READY' && (
-        <div className="fullscreen-overlay">
-          <h2 className="overlay-text">엔터로 시작</h2>
+      {gameState === 'IDLE' && (
+        <div
+          className="fullscreen-overlay"
+          style={{ backgroundColor: 'transparent', backdropFilter: 'none' }}
+        >
+          <span
+            className="blink-prompt"
+            style={{
+              position: 'absolute',
+              bottom: '15%',
+              fontSize: '1.5rem',
+              color: '#fff',
+              textShadow: '0 2px 4px rgba(0,0,0,0.8)',
+            }}
+          >
+            화면을 터치하거나 버튼을 눌러주세요
+          </span>
         </div>
       )}
-      {gameState === 'GAMEOVER' && (
-        <div className="fullscreen-overlay">
+
+      {gameState === 'READY' && (
+        <div className="fullscreen-overlay result-overlay">
           <h2 className="overlay-text">
-            {canRestart ? (
+            게임을 시작합니다!
+            <br />
+            <span
+              style={{
+                fontSize: '1.8rem',
+                display: 'block',
+                marginTop: '15px',
+                color: '#ecf0f1',
+                textShadow: 'none',
+              }}
+            >
+              공이 날아올 때 타이밍에 맞춰 스윙하세요!
+            </span>
+            {canProceed ? (
+              <span className="blink-prompt">엔터(버튼)를 눌러주세요</span>
+            ) : (
+              <span className="blink-prompt waiting">...</span>
+            )}
+          </h2>
+        </div>
+      )}
+
+      {gameState === 'TURN_RESULT' && (
+        <div
+          className={`fullscreen-overlay result-overlay ${effectType.toLowerCase()}`}
+        >
+          <h2 className="overlay-text">
+            {message}
+            <br />
+            {canProceed ? (
+              <span className="blink-prompt">
+                엔터(버튼)를 눌러 다음 타석에 들어서세요
+              </span>
+            ) : (
+              <span className="blink-prompt waiting">...</span>
+            )}
+          </h2>
+        </div>
+      )}
+
+      {gameState === 'GAMEOVER' && (
+        <div className="fullscreen-overlay gameover-overlay">
+          <h2 className="overlay-text">
+            {canProceed ? (
               <>
-                게임 오버!
+                GAME OVER
                 <br />
-                엔터를 눌러 재시작
+                <span className="blink-prompt">버튼을 눌러 재시작</span>
               </>
             ) : (
-              <>게임 오버!</>
+              <>GAME OVER</>
             )}
           </h2>
         </div>
@@ -170,43 +261,86 @@ function App() {
 
       <div className="scoreboard-panel">
         <div className="score-info">
-          <h1>SCORE: {score}</h1>
+          <h1>
+            SCORE: <span className="score-number">{score}</span>
+          </h1>
           <p className="game-msg">{message}</p>
         </div>
+
         <div className="counts">
           {gameState === 'GAMEOVER' ? (
             <h2 className="game-over-text">GAME OVER</h2>
           ) : (
             <div className="led-counts">
               <div className="count-row">
-                <span className="count-label">S:</span>
-                <span className="count-icons">{'🟡'.repeat(strikes)}</span>
+                <span className="count-label">S</span>
+                <span className="count-icons">
+                  {[0, 1].map((i) => (
+                    <div
+                      key={`strike-${i}`}
+                      className={`led-dot strike ${i < strikes ? 'on' : ''}`}
+                    ></div>
+                  ))}
+                </span>
               </div>
               <div className="count-row">
-                <span className="count-label">O:</span>
-                <span className="count-icons">{'🔴'.repeat(outs)}</span>
+                <span className="count-label">O</span>
+                <span className="count-icons">
+                  {[0, 1].map((i) => (
+                    <div
+                      key={`out-${i}`}
+                      className={`led-dot out ${i < outs ? 'on' : ''}`}
+                    ></div>
+                  ))}
+                </span>
               </div>
             </div>
           )}
         </div>
+
+        <div className="legend-box desktop-only">
+          <h3>TARGET GUIDE</h3>
+          <ul className="legend-list">
+            <li>
+              <span className="legend-color-ring ring-hr"></span> 홈런 (HR)
+            </li>
+            <li>
+              <span className="legend-color-ring ring-3b"></span> 3루타 (3B)
+            </li>
+            <li>
+              <span className="legend-color-ring ring-2b"></span> 2루타 (2B)
+            </li>
+            <li>
+              <span className="legend-color-ring ring-1b"></span> 1루타 (1B)
+            </li>
+            <li>
+              <span className="legend-color-ring ring-out"></span> 수비수 (OUT)
+            </li>
+            <li>
+              <span className="legend-color-ring ring-foul"></span> 파울 (FOUL)
+            </li>
+          </ul>
+        </div>
       </div>
 
       <div className="canvas-panel">
-        <div className="infield-dirt"></div>
-        <img
-          src={pitcherImg}
-          alt="투수"
-          className="pitcher-img"
-          style={UI_CONFIG.pitcher}
-        />
-        <img
-          src={batterImg}
-          alt="타자"
-          className="batter-img"
-          style={UI_CONFIG.batter}
-        />
+        <div className="field-container">
+          <div className="infield-dirt"></div>
+          <img
+            src={pitcherImg}
+            alt="투수"
+            className="pitcher-img"
+            style={UI_CONFIG.pitcher}
+          />
+          <img
+            src={batterImg}
+            alt="타자"
+            className="batter-img"
+            style={UI_CONFIG.batter}
+          />
 
-        <MatterGame onHit={handleHit} gameState={gameState} />
+          <MatterGame onHit={handleHit} gameState={gameState} />
+        </div>
       </div>
     </div>
   );

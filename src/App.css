@@ -1,6 +1,15 @@
 /* App.css 전체 덮어쓰기 */
 
-/* 핵심: 너비 계산 시 여백(padding)을 포함시켜 모바일에서 화면 밖으로 밀려나는 것 방지 */
+@import url('https://fonts.googleapis.com/css2?family=Do+Hyeon&family=Orbitron:wght@700;900&display=swap');
+
+#root {
+  max-width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100vw;
+  height: 100vh;
+}
+
 *,
 *::before,
 *::after {
@@ -13,7 +22,7 @@ body {
   overflow: hidden;
   background-color: #111;
   color: white;
-  font-family: 'Arial', sans-serif;
+  font-family: 'Do Hyeon', 'Arial', sans-serif;
   user-select: none;
 }
 
@@ -26,166 +35,318 @@ body {
   overflow: hidden;
 }
 
-/* 왼쪽 스코어 패널 (PC) */
 .scoreboard-panel {
-  width: 320px;
-  background-color: #222;
-  border-right: 5px solid #444;
+  width: 350px;
+  background: linear-gradient(135deg, #161616 0%, #222222 100%);
+  border-right: 2px solid #333;
+  box-shadow: 10px 0 30px rgba(0, 0, 0, 0.8);
   padding: 30px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   z-index: 20;
 }
 
+.score-info {
+  margin-top: 20px;
+}
+
+/* 💡 [겹침 해결 완벽 세팅] 위아래로 떨어뜨리고 여백을 명확히 확보! */
 .score-info h1 {
-  font-size: 2.5rem;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 2.2rem;
   margin: 0 0 15px 0;
   color: #fff;
+  letter-spacing: 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  line-height: 1;
 }
+
+.score-info h1 .score-number {
+  color: #f1c40f;
+  text-shadow: 0 0 15px rgba(241, 196, 15, 0.8);
+  font-size: 4.5rem;
+  margin-left: 0;
+  margin-top: 0;
+  line-height: 1;
+}
+
 .game-msg {
-  font-size: 1.5rem;
-  color: #3498db;
-  min-height: 50px;
+  font-size: 1.8rem;
+  color: #34db98;
+  min-height: 55px;
   margin: 0;
-  font-weight: bold;
-  line-height: 1.4;
+  letter-spacing: 1px;
 }
+
 .counts {
   margin-top: 20px;
 }
 
-/* PC에서도 S, O가 흔들리지 않도록 고정 박스 생성 */
 .led-counts {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  width: 140px;
+  width: 160px;
+  background-color: #050505;
+  padding: 15px 20px;
+  border-radius: 12px;
+  border: 3px solid #222;
+  box-shadow: inset 0 5px 15px rgba(0, 0, 0, 1),
+    0 2px 5px rgba(255, 255, 255, 0.05);
 }
 
-/* 칼각 정렬을 위한 CSS 로직 */
 .count-row {
   display: flex;
   align-items: center;
-  margin: 5px 0;
-  height: 40px;
+  margin: 8px 0;
+  height: 35px;
 }
-
 .count-label {
-  color: white;
+  font-family: 'Orbitron', sans-serif;
+  color: #666;
   font-size: 2rem;
-  font-weight: bold;
-  width: 50px;
-  letter-spacing: 2px;
+  width: 45px;
   text-align: left;
 }
-
 .count-icons {
-  font-size: 1.5rem;
   display: flex;
-  gap: 5px;
+  gap: 12px;
+}
+
+.led-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background-color: #1a1a1a;
+  border: 1px solid #000;
+  box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.9);
+  transition: all 0.2s ease-in-out;
+}
+
+.led-dot.strike.on {
+  background-color: #f1c40f;
+  border-color: #fff;
+  box-shadow: 0 0 15px #f1c40f, inset 0 0 5px rgba(255, 255, 255, 1);
+}
+.led-dot.out.on {
+  background-color: #e74c3c;
+  border-color: #fff;
+  box-shadow: 0 0 15px #e74c3c, inset 0 0 5px rgba(255, 255, 255, 1);
 }
 
 .game-over-text {
+  font-family: 'Orbitron', sans-serif;
   color: #e74c3c;
-  font-size: 2.2rem;
+  font-size: 2.5rem;
+  text-shadow: 0 0 15px rgba(231, 76, 60, 0.8);
   animation: blink 1s infinite;
 }
 
-/* 오른쪽 게임 캔버스 패널 */
+.legend-box {
+  margin-top: 50px;
+  padding-top: 25px;
+  border-top: 2px dashed #333;
+}
+.legend-box h3 {
+  font-family: 'Orbitron', sans-serif;
+  color: #7f8c8d;
+  font-size: 1.3rem;
+  margin: 0 0 20px 0;
+  letter-spacing: 2px;
+}
+.legend-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+.legend-list li {
+  font-size: 1.4rem;
+  color: #ecf0f1;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.legend-color-ring {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background-color: #111;
+  border: 5px solid;
+}
+
+.ring-hr {
+  border-color: #f1c40f;
+  box-shadow: 0 0 10px #f1c40f;
+}
+.ring-3b {
+  border-color: #e67e22;
+  box-shadow: 0 0 10px #e67e22;
+}
+.ring-2b {
+  border-color: #3498db;
+  box-shadow: 0 0 10px #3498db;
+}
+.ring-1b {
+  border-color: #9b59b6;
+  box-shadow: 0 0 10px #9b59b6;
+}
+.ring-out {
+  border-color: #e74c3c;
+  box-shadow: 0 0 10px #e74c3c;
+}
+.ring-foul {
+  border-color: #ecf0f1;
+  box-shadow: 0 0 10px #ecf0f1;
+}
+
 .canvas-panel {
   flex: 1;
-  /* 💡 [핵심 수정] 이 한 줄이 z-index를 작동하게 만듭니다. */
-  position: relative;
-
+  background-color: #0f0f0f;
+  background-image: radial-gradient(circle at center, #1a1a1a 0%, #000 100%);
   display: flex;
   justify-content: center;
   align-items: center;
-  background-color: #27ae60; /* 경기장 바닥색 */
+  padding: 20px;
 }
 
-/* 💡 [추가] 물리 엔진에서 삭제한 흙 배경을 CSS로 구현 */
+.field-container {
+  position: relative;
+  height: 100%;
+  aspect-ratio: 6 / 10;
+  max-width: 100%;
+  background-color: #27ae60;
+  background-image: linear-gradient(
+      45deg,
+      rgba(0, 0, 0, 0.04) 25%,
+      transparent 25%,
+      transparent 75%,
+      rgba(0, 0, 0, 0.04) 75%,
+      rgba(0, 0, 0, 0.04)
+    ),
+    linear-gradient(
+      45deg,
+      rgba(0, 0, 0, 0.04) 25%,
+      transparent 25%,
+      transparent 75%,
+      rgba(0, 0, 0, 0.04) 75%,
+      rgba(0, 0, 0, 0.04)
+    ),
+    radial-gradient(
+      circle at 50% 100%,
+      transparent 20%,
+      rgba(0, 0, 0, 0.4) 100%
+    );
+  background-size: 80px 80px, 80px 80px, 100% 100%;
+  background-position: 0 0, 40px 40px, 0 0;
+  border: 12px solid #2c3e50;
+  border-radius: 15px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.9), inset 0 0 40px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+
 .infield-dirt {
   position: absolute;
-  bottom: -100px; /* 흙이 타석 아래에서 올라오게 위치 */
-  left: 50%;
-  transform: translateX(-50%);
-  width: 550px; /* 흙 원형의 크기 */
-  height: 550px;
-  background-color: #e67e22; /* 흙 색깔 */
-  border-radius: 50%; /* 완벽한 원형 */
-
-  /* 💡 [핵심] 타자 이미지 뒤, 캔버스 뒤에 배치 */
+  bottom: -15%;
+  left: 5%;
+  width: 90%;
+  aspect-ratio: 1 / 1;
+  background: radial-gradient(circle, #e67e22 30%, #d35400 90%);
+  border-radius: 50%;
+  border: 3px solid rgba(135, 54, 0, 0.5);
+  box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 0, 0, 0.5);
   z-index: 1;
 }
 
-/* 🌟 투수/타자 이미지는 흙보다 위, 캔버스보다 아래에 배치 */
-.pitcher-img {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-
-  /* 💡 [핵심] 흙(z:1)보다는 위로, 캔버스(z:10)보다는 아래로 */
-  z-index: 2;
-}
-
+.pitcher-img,
 .batter-img {
   position: absolute;
-  transform: translate(-50%, 0);
   pointer-events: none;
-
-  /* 💡 [핵심] 흙(z:1)보다는 위로, 캔버스(z:10)보다는 아래로 */
   z-index: 2;
+  filter: drop-shadow(0 8px 6px rgba(0, 0, 0, 0.6));
+}
+.pitcher-img {
+  transform: translate(-50%, -50%);
+}
+.batter-img {
+  transform: translate(-50%, 0);
 }
 
-.canvas-panel canvas {
-  position: relative;
+.field-container canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100% !important;
   height: 100% !important;
   object-fit: contain;
   touch-action: none;
-
-  /* 💡 [핵심 수정] 캔버스를 이미지 위로 띄움 (레이어 10) */
   z-index: 10;
 }
 
-/* App.css 맨 아래 추가 (기존 .overlay-message 관련 코드는 지워주세요!) */
-
-/* 🌟 물리 엔진과 상관없이 모니터 화면 전체를 덮어버리는 무적 레이어 */
 .fullscreen-overlay {
-  position: fixed; /* absolute가 아닌 fixed로 화면 전체 고정! */
+  position: fixed;
   top: 0;
   left: 0;
   width: 100vw;
   height: 100vh;
-  background-color: rgba(0, 0, 0, 0.75);
+  background-color: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 999999 !important; /* 그 어떤 요소보다 무조건 최상단 보장 */
+  z-index: 999999 !important;
   pointer-events: none;
+  transition: all 0.3s ease;
+  overflow: hidden;
 }
 
-/* 🌟 글씨가 안 보일래야 안 보일 수 없는 강력한 디자인 */
+.result-overlay {
+  background-color: rgba(41, 128, 185, 0.6);
+}
+.result-overlay.hit {
+  background-color: rgba(39, 174, 96, 0.65);
+}
+.result-overlay.out {
+  background-color: rgba(192, 57, 43, 0.7);
+}
+/* 💡 [추가] 파울/스트라이크일 때 뜨는 노란색(주황빛) 배경! */
+.result-overlay.strike {
+  background-color: rgba(241, 196, 15, 0.7);
+}
+.gameover-overlay {
+  background-color: rgba(192, 57, 43, 0.85);
+}
+
 .overlay-text {
-  color: #ffffff !important; /* 눈부신 흰색 글씨 */
-  font-size: 3rem !important;
-  font-weight: bold;
-  background-color: #e74c3c !important; /* 강렬한 빨간색 박스 */
-  padding: 30px 50px;
-  border-radius: 20px;
-  border: 5px solid #f1c40f; /* 노란색 테두리 */
+  font-family: 'Do Hyeon', sans-serif !important;
+  color: #ffffff;
+  font-size: 4rem !important;
+  letter-spacing: 2px;
+  text-shadow: 0 10px 20px rgba(0, 0, 0, 0.8);
   text-align: center;
-  animation: blink 1.5s infinite;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+  z-index: 10;
 }
 
-/* 📱 모바일에서는 글자 크기 살짝 조절 */
-@media (max-width: 768px) {
-  .overlay-text {
-    font-size: 2rem !important;
-    padding: 20px 30px;
-  }
+.blink-prompt {
+  font-family: 'Do Hyeon', sans-serif !important;
+  font-size: 2rem !important;
+  color: #f1c40f;
+  display: block;
+  margin-top: 25px;
+  animation: blink 1.5s infinite;
+}
+
+.blink-prompt.waiting {
+  color: #bdc3c7;
+  animation: none;
 }
 
 @keyframes blink {
@@ -194,7 +355,7 @@ body {
     opacity: 1;
   }
   50% {
-    opacity: 0.5;
+    opacity: 0.3;
   }
 }
 
@@ -203,65 +364,86 @@ body {
   .game-wrapper {
     flex-direction: column;
   }
-
   .scoreboard-panel {
     width: 100%;
     height: auto;
-    min-height: 100px;
+    min-height: 90px;
     flex-direction: row;
     justify-content: space-between;
     align-items: center;
-    padding: 15px 20px;
+    padding: 10px 20px;
     border-right: none;
-    border-bottom: 3px solid #444;
+    border-bottom: 5px solid #000;
+  }
+
+  .desktop-only {
+    display: none !important;
   }
 
   .score-info {
-    flex: 1;
-  }
-  .score-info h1 {
-    font-size: 1.5rem;
-    margin-bottom: 5px;
-  }
-  .game-msg {
-    font-size: 1.1rem;
-    min-height: 25px;
+    margin-top: 0;
   }
 
+  /* 모바일에서는 다시 가로로 작게 배치 */
+  .score-info h1 {
+    flex-direction: row;
+    align-items: center;
+    gap: 0;
+    font-size: 1.8rem;
+    margin-bottom: 5px;
+    justify-content: flex-start;
+  }
+  .score-info h1 .score-number {
+    font-size: 2.2rem;
+    margin-left: 10px;
+    margin-top: 0;
+  }
+
+  .game-msg {
+    font-size: 1.3rem;
+    min-height: 25px;
+  }
   .counts {
     margin-top: 0;
     flex: 1;
     display: flex;
     justify-content: flex-end;
   }
-
   .led-counts {
-    display: flex;
     flex-direction: column;
     align-items: flex-start;
-    width: 100px;
+    width: 110px;
+    padding: 10px;
   }
-
   .count-row {
-    margin: 2px 0;
-    height: 30px;
+    margin: 3px 0;
+    height: 25px;
   }
   .count-label {
     font-size: 1.5rem;
-    width: 40px;
+    width: 30px;
   }
-  .count-icons {
-    font-size: 1.2rem;
+  .led-dot {
+    width: 16px;
+    height: 16px;
+    gap: 8px;
   }
 
   .canvas-panel {
-    height: calc(100dvh - 100px);
+    height: calc(100dvh - 90px);
+    padding: 5px;
+  }
+  .field-container {
+    border-width: 6px;
+  }
+  .infield-dirt {
+    bottom: -15%;
   }
 
-  /* 💡 모바일에서 흙 크기 축소 */
-  .infield-dirt {
-    width: 400px;
-    height: 400px;
-    bottom: -80px;
+  .overlay-text {
+    font-size: 2.8rem !important;
+  }
+  .blink-prompt {
+    font-size: 1.5rem !important;
   }
 }
