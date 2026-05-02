@@ -3,6 +3,9 @@ import React, { useEffect, useRef } from 'react';
 import Matter from 'matter-js';
 import { PROCON_CONFIG } from './App';
 
+// src/assets/ 폴더 안에 타격음 파일(hit.mp3)을 꼭 넣어주세요!
+import hitSoundFile from './assets/hit.mp3';
+
 const CONFIG = {
   pitcher: { x: 300, y: 400 },
   hrZone: [
@@ -28,8 +31,6 @@ const CONFIG = {
   defenders: [
     { x: 150, y: 225, radius: 25, range: 60, speed: 0.05 },
     { x: 450, y: 225, radius: 25, range: 60, speed: 0.05 },
-    // { x: 150, y: 500, radius: 12, range: 60, speed: 0.025 },
-    // { x: 450, y: 500, radius: 12, range: 60, speed: 0.025 },
   ],
   rails: [
     { x: 100, y: 800, width: 250, angle: 35 },
@@ -41,15 +42,35 @@ const CONFIG = {
 const MatterGame = ({ onHit, gameState }) => {
   const canvasRef = useRef(null);
   const engineRef = useRef(null);
+
   const isSwinging = useRef(false);
+  const isActivelySwinging = useRef(false);
 
   const pitchStateRef = useRef('WAITING_PITCH');
   const pitchTimeoutRef = useRef(null);
+
+  const hitSoundRef = useRef(null);
+  const lastSoundTimeRef = useRef(0);
 
   const onHitRef = useRef(onHit);
   useEffect(() => {
     onHitRef.current = onHit;
   }, [onHit]);
+
+  // 💡 [최적화 1] 상태(gameState)가 바뀔 때마다 물리 엔진이 재시작되는 렉을 막기 위해 상태를 Ref에 저장
+  const gameStateRef = useRef(gameState);
+  useEffect(() => {
+    gameStateRef.current = gameState;
+  }, [gameState]);
+
+  useEffect(() => {
+    const audio = new Audio(hitSoundFile);
+    audio.preload = 'auto';
+    audio.volume = 0.3;
+    audio.playbackRate = 0.8;
+    audio.preservesPitch = false;
+    hitSoundRef.current = audio;
+  }, []);
 
   useEffect(() => {
     if (gameState === 'PLAYING') {
@@ -69,6 +90,7 @@ const MatterGame = ({ onHit, gameState }) => {
     if (pitchBallRef.current) pitchBallRef.current();
   };
 
+  // 💡 [최적화 2] 물리 엔진(Matter.js)을 최초 1번만 렌더링하도록 의존성 배열을 []로 비웁니다! (렉 해결의 핵심)
   useEffect(() => {
     const { Engine, Render, Runner, Bodies, Composite, Events, Body } = Matter;
     const engine = Engine.create();
@@ -130,7 +152,6 @@ const MatterGame = ({ onHit, gameState }) => {
       }),
     ];
 
-    // 💡 테두리 굵기를 6으로 적당하게 줄임
     const createHole = (pos, label, color) =>
       Bodies.circle(pos.x, pos.y, pos.radius, {
         isSensor: true,
@@ -154,7 +175,8 @@ const MatterGame = ({ onHit, gameState }) => {
       ...CONFIG.tripleZones.map((p) => createHole(p, '3B', '#e67e22')),
       ...CONFIG.doubleZones.map((p) => createHole(p, '2B', '#3498db')),
       ...CONFIG.singleZones.map((p) => createHole(p, '1B', '#9b59b6')),
-      ...CONFIG.foulZones.map((p) => createHole(p, 'FOUL', '#ecf0f1')), // 파울은 원래 흰색 유지
+      // 💡 [수정] 파울 구멍 색상을 다시 흰색(#ecf0f1)으로 원상복구!
+      ...CONFIG.foulZones.map((p) => createHole(p, 'FOUL', '#ecf0f1')),
       ...defenderBodies.map((d) => d.body),
     ];
 
@@ -193,10 +215,8 @@ const MatterGame = ({ onHit, gameState }) => {
       bat,
     ]);
 
-    // 💡 네온 밝기(shadowBlur)를 10으로 줄여서 은은하게
     Events.on(render, 'afterRender', () => {
       const ctx = render.context;
-
       holes.forEach((hole) => {
         ctx.beginPath();
         ctx.arc(
@@ -217,9 +237,9 @@ const MatterGame = ({ onHit, gameState }) => {
       });
     });
 
-    // 여기서부터 끊겼던 코드입니다!
     pitchBallRef.current = () => {
-      if (gameState !== 'PLAYING') return;
+      // 💡 상태 확인을 Ref를 통해 진행합니다.
+      if (gameStateRef.current !== 'PLAYING') return;
       const ball = Bodies.circle(
         CONFIG.pitcher.x + (Math.random() * 40 - 20),
         CONFIG.pitcher.y,
@@ -233,12 +253,31 @@ const MatterGame = ({ onHit, gameState }) => {
         }
       );
       Composite.add(engine.world, ball);
-      pitchStateRef.current = 'PITCHING';
     };
 
     Events.on(engine, 'collisionStart', (event) => {
       event.pairs.forEach((pair) => {
         const labels = [pair.bodyA.label, pair.bodyB.label];
+
+        if (labels.includes('ball') && labels.includes('bat')) {
+          if (isActivelySwinging.current && hitSoundRef.current) {
+            const now = Date.now();
+            if (now - lastSoundTimeRef.current > 100) {
+              const soundClone = hitSoundRef.current.cloneNode();
+
+              // 클론에도 설정값을 그대로 적용해줍니다.
+              soundClone.volume = hitSoundRef.current.volume;
+              soundClone.playbackRate = hitSoundRef.current.playbackRate;
+              soundClone.preservesPitch = hitSoundRef.current.preservesPitch;
+
+              soundClone
+                .play()
+                .catch((e) => console.log('오디오 재생 실패:', e));
+              lastSoundTimeRef.current = now;
+            }
+          }
+        }
+
         if (labels.includes('ball')) {
           const ball = pair.bodyA.label === 'ball' ? pair.bodyA : pair.bodyB;
           const sensor = pair.bodyA.label === 'ball' ? pair.bodyB : pair.bodyA;
@@ -249,7 +288,7 @@ const MatterGame = ({ onHit, gameState }) => {
             )
           ) {
             Composite.remove(engine.world, ball);
-            onHitRef.current(sensor.label);
+            if (onHitRef.current) onHitRef.current(sensor.label);
           }
         }
       });
@@ -258,7 +297,7 @@ const MatterGame = ({ onHit, gameState }) => {
     const handleInputDown = (e) => {
       if (e.key === 'Enter' || e.type === 'touchstart') {
         if (e.key === 'Enter') e.preventDefault();
-        if (gameState === 'PLAYING') isSwinging.current = true;
+        if (gameStateRef.current === 'PLAYING') isSwinging.current = true;
       }
     };
 
@@ -295,11 +334,12 @@ const MatterGame = ({ onHit, gameState }) => {
       }
 
       let isGamepadSwinging = false;
-      if (isGamepadPressed && gameState === 'PLAYING') {
+      if (isGamepadPressed && gameStateRef.current === 'PLAYING') {
         isGamepadSwinging = true;
       }
 
       const isSwingingNow = isSwinging.current || isGamepadSwinging;
+      isActivelySwinging.current = isSwingingNow;
 
       const targetAngle = isSwingingNow
         ? CONFIG.bat.angleUp * (Math.PI / 180)
@@ -350,7 +390,7 @@ const MatterGame = ({ onHit, gameState }) => {
       Runner.stop(runner);
       Engine.clear(engine);
     };
-  }, [gameState]);
+  }, []); // 💡 [의존성 배열 비움] 이 빈 괄호가 렉을 없애주는 핵심 마법입니다!
 
   return (
     <canvas
