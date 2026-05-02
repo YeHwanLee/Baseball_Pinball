@@ -3,6 +3,7 @@ import React, { useEffect, useRef } from 'react';
 import Matter from 'matter-js';
 import { PROCON_CONFIG } from './App';
 
+// src/assets/ 폴더 안에 타격음 파일(hit.mp3)을 꼭 넣어주세요!
 import hitSoundFile from './assets/hit.mp3';
 
 const CONFIG = {
@@ -48,7 +49,6 @@ const MatterGame = ({ onHit, gameState }) => {
   const pitchStateRef = useRef('WAITING_PITCH');
   const pitchTimeoutRef = useRef(null);
 
-  // 💡 [Web Audio API] 전용 변수 생성
   const audioCtxRef = useRef(null);
   const audioBufferRef = useRef(null);
   const lastSoundTimeRef = useRef(0);
@@ -63,13 +63,12 @@ const MatterGame = ({ onHit, gameState }) => {
     gameStateRef.current = gameState;
   }, [gameState]);
 
-  // 💡 [핵심 수정] HTML 태그 대신 Web Audio API로 사운드를 메모리에 올려 즉각 반응하게 만듭니다.
+  // 💡 [오디오 초기화 및 잠금 해제 로직]
   useEffect(() => {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     const audioCtx = new AudioContext();
     audioCtxRef.current = audioCtx;
 
-    // 사운드 파일을 미리 가져와서(fetch) 해독(decode)해 둡니다.
     fetch(hitSoundFile)
       .then((response) => response.arrayBuffer())
       .then((arrayBuffer) => audioCtx.decodeAudioData(arrayBuffer))
@@ -78,7 +77,21 @@ const MatterGame = ({ onHit, gameState }) => {
       })
       .catch((e) => console.error('오디오 로딩 실패:', e));
 
+    // 💡 [핵심 해결] 사용자가 화면의 어디든 누르거나 키보드를 치면 오디오 엔진을 미리 깨웁니다!
+    const unlockAudioEngine = () => {
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    };
+
+    window.addEventListener('click', unlockAudioEngine);
+    window.addEventListener('touchstart', unlockAudioEngine);
+    window.addEventListener('keydown', unlockAudioEngine);
+
     return () => {
+      window.removeEventListener('click', unlockAudioEngine);
+      window.removeEventListener('touchstart', unlockAudioEngine);
+      window.removeEventListener('keydown', unlockAudioEngine);
       if (audioCtx.state !== 'closed') {
         audioCtx.close();
       }
@@ -270,7 +283,6 @@ const MatterGame = ({ onHit, gameState }) => {
         const labels = [pair.bodyA.label, pair.bodyB.label];
 
         if (labels.includes('ball') && labels.includes('bat')) {
-          // 💡 [Web Audio API 재생 로직]
           if (
             isActivelySwinging.current &&
             audioCtxRef.current &&
@@ -278,30 +290,35 @@ const MatterGame = ({ onHit, gameState }) => {
           ) {
             const now = Date.now();
             if (now - lastSoundTimeRef.current > 100) {
+              lastSoundTimeRef.current = now; // 시간 기록을 최우선으로 하여 중복 방지
+
               const ctx = audioCtxRef.current;
 
-              // 브라우저 정책상 오디오가 멈춰있을 수 있으므로 깨워줍니다.
-              if (ctx.state === 'suspended') ctx.resume();
+              // 💡 사운드를 세팅하고 발사하는 로직을 분리
+              const fireSound = () => {
+                const source = ctx.createBufferSource();
+                source.buffer = audioBufferRef.current;
+                source.playbackRate.value = 0.8; // 둔탁한 소리를 위해 속도 저하
 
-              // 소리를 쏠 준비 (Source Node 생성)
-              const source = ctx.createBufferSource();
-              source.buffer = audioBufferRef.current;
+                const gainNode = ctx.createGain();
+                gainNode.gain.value = 0.3; // 볼륨 30%
 
-              // 속도 및 피치 조절 (속도를 낮추면 자연스럽게 피치도 무겁게 낮아집니다)
-              source.playbackRate.value = 0.8;
+                source.connect(gainNode);
+                gainNode.connect(ctx.destination);
+                source.start(0);
+              };
 
-              // 볼륨 조절 (Gain Node 생성)
-              const gainNode = ctx.createGain();
-              gainNode.gain.value = 0.3; // 볼륨 30%
-
-              // 연결 (Source -> Volume -> 스피커)
-              source.connect(gainNode);
-              gainNode.connect(ctx.destination);
-
-              // 0 딜레이 즉각 재생 발사!
-              source.start(0);
-
-              lastSoundTimeRef.current = now;
+              // 💡 [핵심 방어] 엔진이 자고 있다면 깨운 뒤에 쏘고, 깨어있다면 바로 쏩니다!
+              if (ctx.state === 'suspended') {
+                ctx
+                  .resume()
+                  .then(() => {
+                    fireSound();
+                  })
+                  .catch((e) => console.error('Audio resume error:', e));
+              } else {
+                fireSound();
+              }
             }
           }
         }
@@ -326,7 +343,6 @@ const MatterGame = ({ onHit, gameState }) => {
       if (e.key === 'Enter' || e.type === 'touchstart') {
         if (e.key === 'Enter') e.preventDefault();
 
-        // 오디오 컨텍스트 락 해제 (사용자가 화면을 누를 때 오디오 엔진을 깨워줍니다)
         if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
           audioCtxRef.current.resume();
         }
