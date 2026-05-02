@@ -3,7 +3,6 @@ import React, { useEffect, useRef } from 'react';
 import Matter from 'matter-js';
 import { PROCON_CONFIG } from './App';
 
-// src/assets/ 폴더 안에 타격음 파일(hit.mp3)을 꼭 넣어주세요!
 import hitSoundFile from './assets/hit.mp3';
 
 const CONFIG = {
@@ -49,7 +48,9 @@ const MatterGame = ({ onHit, gameState }) => {
   const pitchStateRef = useRef('WAITING_PITCH');
   const pitchTimeoutRef = useRef(null);
 
-  const hitSoundRef = useRef(null);
+  // 💡 [Web Audio API] 전용 변수 생성
+  const audioCtxRef = useRef(null);
+  const audioBufferRef = useRef(null);
   const lastSoundTimeRef = useRef(0);
 
   const onHitRef = useRef(onHit);
@@ -57,19 +58,31 @@ const MatterGame = ({ onHit, gameState }) => {
     onHitRef.current = onHit;
   }, [onHit]);
 
-  // 💡 [최적화 1] 상태(gameState)가 바뀔 때마다 물리 엔진이 재시작되는 렉을 막기 위해 상태를 Ref에 저장
   const gameStateRef = useRef(gameState);
   useEffect(() => {
     gameStateRef.current = gameState;
   }, [gameState]);
 
+  // 💡 [핵심 수정] HTML 태그 대신 Web Audio API로 사운드를 메모리에 올려 즉각 반응하게 만듭니다.
   useEffect(() => {
-    const audio = new Audio(hitSoundFile);
-    audio.preload = 'auto';
-    audio.volume = 0.3;
-    audio.playbackRate = 0.8;
-    audio.preservesPitch = false;
-    hitSoundRef.current = audio;
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioContext();
+    audioCtxRef.current = audioCtx;
+
+    // 사운드 파일을 미리 가져와서(fetch) 해독(decode)해 둡니다.
+    fetch(hitSoundFile)
+      .then((response) => response.arrayBuffer())
+      .then((arrayBuffer) => audioCtx.decodeAudioData(arrayBuffer))
+      .then((decodedAudio) => {
+        audioBufferRef.current = decodedAudio;
+      })
+      .catch((e) => console.error('오디오 로딩 실패:', e));
+
+    return () => {
+      if (audioCtx.state !== 'closed') {
+        audioCtx.close();
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -90,7 +103,6 @@ const MatterGame = ({ onHit, gameState }) => {
     if (pitchBallRef.current) pitchBallRef.current();
   };
 
-  // 💡 [최적화 2] 물리 엔진(Matter.js)을 최초 1번만 렌더링하도록 의존성 배열을 []로 비웁니다! (렉 해결의 핵심)
   useEffect(() => {
     const { Engine, Render, Runner, Bodies, Composite, Events, Body } = Matter;
     const engine = Engine.create();
@@ -175,7 +187,6 @@ const MatterGame = ({ onHit, gameState }) => {
       ...CONFIG.tripleZones.map((p) => createHole(p, '3B', '#e67e22')),
       ...CONFIG.doubleZones.map((p) => createHole(p, '2B', '#3498db')),
       ...CONFIG.singleZones.map((p) => createHole(p, '1B', '#9b59b6')),
-      // 💡 [수정] 파울 구멍 색상을 다시 흰색(#ecf0f1)으로 원상복구!
       ...CONFIG.foulZones.map((p) => createHole(p, 'FOUL', '#ecf0f1')),
       ...defenderBodies.map((d) => d.body),
     ];
@@ -238,7 +249,6 @@ const MatterGame = ({ onHit, gameState }) => {
     });
 
     pitchBallRef.current = () => {
-      // 💡 상태 확인을 Ref를 통해 진행합니다.
       if (gameStateRef.current !== 'PLAYING') return;
       const ball = Bodies.circle(
         CONFIG.pitcher.x + (Math.random() * 40 - 20),
@@ -260,19 +270,37 @@ const MatterGame = ({ onHit, gameState }) => {
         const labels = [pair.bodyA.label, pair.bodyB.label];
 
         if (labels.includes('ball') && labels.includes('bat')) {
-          if (isActivelySwinging.current && hitSoundRef.current) {
+          // 💡 [Web Audio API 재생 로직]
+          if (
+            isActivelySwinging.current &&
+            audioCtxRef.current &&
+            audioBufferRef.current
+          ) {
             const now = Date.now();
             if (now - lastSoundTimeRef.current > 100) {
-              const soundClone = hitSoundRef.current.cloneNode();
+              const ctx = audioCtxRef.current;
 
-              // 클론에도 설정값을 그대로 적용해줍니다.
-              soundClone.volume = hitSoundRef.current.volume;
-              soundClone.playbackRate = hitSoundRef.current.playbackRate;
-              soundClone.preservesPitch = hitSoundRef.current.preservesPitch;
+              // 브라우저 정책상 오디오가 멈춰있을 수 있으므로 깨워줍니다.
+              if (ctx.state === 'suspended') ctx.resume();
 
-              soundClone
-                .play()
-                .catch((e) => console.log('오디오 재생 실패:', e));
+              // 소리를 쏠 준비 (Source Node 생성)
+              const source = ctx.createBufferSource();
+              source.buffer = audioBufferRef.current;
+
+              // 속도 및 피치 조절 (속도를 낮추면 자연스럽게 피치도 무겁게 낮아집니다)
+              source.playbackRate.value = 0.8;
+
+              // 볼륨 조절 (Gain Node 생성)
+              const gainNode = ctx.createGain();
+              gainNode.gain.value = 0.3; // 볼륨 30%
+
+              // 연결 (Source -> Volume -> 스피커)
+              source.connect(gainNode);
+              gainNode.connect(ctx.destination);
+
+              // 0 딜레이 즉각 재생 발사!
+              source.start(0);
+
               lastSoundTimeRef.current = now;
             }
           }
@@ -297,6 +325,12 @@ const MatterGame = ({ onHit, gameState }) => {
     const handleInputDown = (e) => {
       if (e.key === 'Enter' || e.type === 'touchstart') {
         if (e.key === 'Enter') e.preventDefault();
+
+        // 오디오 컨텍스트 락 해제 (사용자가 화면을 누를 때 오디오 엔진을 깨워줍니다)
+        if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+          audioCtxRef.current.resume();
+        }
+
         if (gameStateRef.current === 'PLAYING') isSwinging.current = true;
       }
     };
@@ -390,7 +424,7 @@ const MatterGame = ({ onHit, gameState }) => {
       Runner.stop(runner);
       Engine.clear(engine);
     };
-  }, []); // 💡 [의존성 배열 비움] 이 빈 괄호가 렉을 없애주는 핵심 마법입니다!
+  }, []);
 
   return (
     <canvas
